@@ -1,0 +1,5 @@
+# Upcoming weekend fixtures — one per line: "Home vs Away"
+# Optional decimal odds (home draw away) after a pipe:
+#   Girona vs Betis | 2.10 3.40 3.60
+Real Madrid vs Valencia
+Barcelona vs Sevilla

@@ -17,6 +17,16 @@ Scoring/optimization design:
   mathematical weight in the multi:softprob objective.
 * The final winner serialized with joblib is the model with the **lowest
   log-loss on the held-out test season**.
+* Self-correcting feedback: before the training matrix is initialized the
+  ledger ``data/processed/prediction_history.csv`` is read and the rolling
+  Draw-class precision over the last 30 settled entries is measured. When
+  that precision falls below 25% (the model is overestimating draw edges
+  and losing money on value bets) the Draw class (label 1) coefficients are
+  raised by 15% for both models — XGBoost's per-row ``sample_weight`` and the
+  Random Forest class-cost penalty — so the next optimization loop is more
+  conservative. With fewer than 5 settled entries (brand-new ledger) or a
+  precision at/above the floor, everything runs at the baseline
+  ``balanced_subsample`` state.
 
 The split is time-based: the historical seasons (23/24 + 24/25 + 25/26) form
 the training set and the current 26/27 season is the held-out test set. See
@@ -65,6 +75,9 @@ Y_TRAIN_PATH = PROCESSED_DIR / "y_train.csv"
 X_TEST_PATH = PROCESSED_DIR / "X_test_scaled.csv"
 Y_TEST_PATH = PROCESSED_DIR / "y_test.csv"
 
+# Prediction ledger written by predict_upcoming.py / backfill_results.py.
+LEDGER_PATH = PROCESSED_DIR / "prediction_history.csv"
+
 # match_outcome codes -> human-readable labels.
 OUTCOME_LABELS = {2: "Home Win", 1: "Draw", 0: "Away Win"}
 LABEL_ORDER = [2, 1, 0]  # display order: Home Win, Draw, Away Win
@@ -73,6 +86,13 @@ RANDOM_STATE = 42
 N_SEARCH_ITER = 40        # RandomizedSearchCV candidates per model
 CV_FOLDS = 5              # stratified folds inside the training window
 SEARCH_JOBS = -1          # parallelize the search itself
+
+# --- Self-correcting ledger feedback ---------------------------------------
+DRAW_CLASS = 1              # match_outcome code for a Draw (class 1)
+DRAW_WINDOW = 30            # rolling window of settled ledger entries
+MIN_SETTLED_ENTRIES = 5     # below this -> baseline adjustment state
+DRAW_PRECISION_FLOOR = 0.25 # below this -> penalize the Draw class
+DRAW_PENALTY_FACTOR = 1.15  # +15% on Draw coefficients when triggered
 
 logging.basicConfig(
     level=logging.INFO,
@@ -121,11 +141,103 @@ def load_processed() -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
 # Model search spaces
 # ---------------------------------------------------------------------------
 
-def build_search_spaces() -> dict:
+def read_draw_performance() -> dict:
+    """Read the ledger and measure rolling Draw precision over its tail.
+
+    Must run **before** the training matrix is initialized. Filters
+    ``data/processed/prediction_history.csv`` to settled rows (non-blank
+    ``actual_outcome``), keeps the last ``DRAW_WINDOW`` entries and computes
+    Draw-class precision: of the rows whose model argmax was the Draw, the
+    share that actually finished as a Draw.
+
+    Any unusable state — missing/unreadable ledger, missing columns, fewer
+    than ``MIN_SETTLED_ENTRIES`` settled rows (e.g. a brand-new file), no
+    Draw predictions or unparseable cells — degrades gracefully to the
+    baseline adjustment state (``adjust=False``) instead of raising.
+    """
+    stats: dict = {
+        "settled_entries": 0,
+        "window_entries": 0,
+        "draw_predictions": 0,
+        "draw_precision": None,
+        "adjust": False,
+        "reason": "",
+    }
+
+    def baseline(reason: str) -> dict:
+        stats["reason"] = reason
+        logger.info("Draw feedback: %s", reason)
+        return stats
+
+    if not LEDGER_PATH.exists():
+        return baseline(f"ledger {LEDGER_PATH} not found - baseline state")
+
+    try:
+        ledger = pd.read_csv(LEDGER_PATH, dtype=str, keep_default_na=False)
+    except Exception as exc:  # noqa: BLE001 - feedback must never crash training
+        return baseline(f"ledger unreadable ({exc}) - baseline state")
+
+    prob_cols = ["model_prob_home", "model_prob_draw", "model_prob_away"]
+    if "actual_outcome" not in ledger.columns or not all(
+        c in ledger.columns for c in prob_cols
+    ):
+        return baseline("ledger missing required columns - baseline state")
+
+    settled = ledger[ledger["actual_outcome"].astype(str).str.strip() != ""].copy()
+    stats["settled_entries"] = len(settled)
+    if len(settled) < MIN_SETTLED_ENTRIES:
+        return baseline(
+            f"only {len(settled)} settled entries "
+            f"(< {MIN_SETTLED_ENTRIES}) - baseline state"
+        )
+
+    window = settled.tail(DRAW_WINDOW)
+    probs = window[prob_cols].apply(pd.to_numeric, errors="coerce")
+    actual = pd.to_numeric(window["actual_outcome"], errors="coerce")
+    usable = probs.notna().all(axis=1) & actual.notna()
+    probs, actual = probs[usable], actual[usable]
+    stats["window_entries"] = len(probs)
+    if not usable.any():
+        return baseline("no parseable settled rows in window - baseline state")
+
+    # Model's top pick per row over [home, draw, away] -> index 1 == Draw.
+    predicted = probs.to_numpy().argmax(axis=1)
+    draw_mask = predicted == 1
+    n_draw_pred = int(draw_mask.sum())
+    stats["draw_predictions"] = n_draw_pred
+    if n_draw_pred == 0:
+        return baseline("no Draw predictions in window - baseline state")
+
+    precision = float((actual.to_numpy()[draw_mask] == DRAW_CLASS).mean())
+    stats["draw_precision"] = precision
+
+    if precision < DRAW_PRECISION_FLOOR:
+        stats["adjust"] = True
+        stats["reason"] = (
+            f"Draw precision {precision:.1%} < {DRAW_PRECISION_FLOOR:.0%} floor "
+            f"over last {len(probs)} settled entries "
+            f"({n_draw_pred} Draw picks) - applying +"
+            f"{(DRAW_PENALTY_FACTOR - 1) * 100:.0f}% Draw penalty"
+        )
+    else:
+        stats["reason"] = (
+            f"Draw precision {precision:.1%} >= {DRAW_PRECISION_FLOOR:.0%} floor "
+            f"over last {len(probs)} settled entries "
+            f"({n_draw_pred} Draw picks) - baseline weights retained"
+        )
+    logger.info("Draw feedback: %s", stats["reason"])
+    return stats
+
+
+def build_search_spaces(rf_class_weight="balanced_subsample") -> dict:
     """Return {name: (estimator, param_distributions)} for tuning.
 
     Estimators use n_jobs=1 so the outer RandomizedSearchCV (SEARCH_JOBS=-1)
     can parallelize across candidates without oversubscribing cores.
+
+    ``rf_class_weight`` is the Random Forest cost penalty: the baseline
+    ``"balanced_subsample"`` string, or an explicit per-class dict when the
+    ledger feedback raised the Draw-class penalty.
     """
     # XGBoost: multi:softprob + mlogloss; draw significance comes from the
     # balanced sample weights supplied at fit time (see balanced_sample_weights).
@@ -151,7 +263,7 @@ def build_search_spaces() -> dict:
 
     # Random Forest: per-bag class balancing so Draw is never free to ignore.
     rf = RandomForestClassifier(
-        class_weight="balanced_subsample",
+        class_weight=rf_class_weight,
         random_state=RANDOM_STATE,
         n_jobs=1,
     )
@@ -168,19 +280,77 @@ def build_search_spaces() -> dict:
     }
 
 
-def balanced_sample_weights(y: pd.Series) -> np.ndarray:
-    """Inverse-frequency sample weights: n / (n_classes * class_count)."""
+def balanced_sample_weights(y: pd.Series, draw_multiplier: float = 1.0) -> np.ndarray:
+    """Inverse-frequency sample weights: n / (n_classes * class_count).
+
+    ``draw_multiplier`` scales the Draw class (1) coefficient: 1.0 keeps the
+    baseline, 1.15 applies the ledger-driven +15% penalty.
+    """
     y_arr = np.asarray(y)
     classes, counts = np.unique(y_arr, return_counts=True)
     weight_map = {
         c: len(y_arr) / (len(classes) * cnt) for c, cnt in zip(classes, counts)
     }
+    if draw_multiplier != 1.0 and DRAW_CLASS in weight_map:
+        weight_map[DRAW_CLASS] *= draw_multiplier
     weights = np.array([weight_map[v] for v in y_arr], dtype=float)
     logger.info(
-        "Balanced sample weights per class: %s",
+        "Balanced sample weights per class%s: %s",
+        " (Draw-adjusted)" if draw_multiplier != 1.0 else "",
         {int(c): round(weight_map[c], 3) for c in classes},
     )
     return weights
+
+
+def rf_class_cost(y: pd.Series, draw_multiplier: float = 1.0):
+    """Random Forest class-cost penalty for the current feedback state.
+
+    Baseline is the ``"balanced_subsample"`` string. When the ledger
+    feedback triggers, returns an explicit balanced per-class dict with the
+    Draw class (1) scaled by ``draw_multiplier`` (1.15 = +15% cost penalty).
+    """
+    if draw_multiplier == 1.0:
+        return "balanced_subsample"
+    y_arr = np.asarray(y)
+    classes, counts = np.unique(y_arr, return_counts=True)
+    cost = {
+        int(c): len(y_arr) / (len(classes) * cnt) for c, cnt in zip(classes, counts)
+    }
+    cost[DRAW_CLASS] = cost.get(DRAW_CLASS, 1.0) * draw_multiplier
+    logger.info("Random Forest Draw-adjusted class cost: %s", cost)
+    return cost
+
+
+def log_training_coefficients(
+    draw_stats: dict, sample_weight: np.ndarray, y: pd.Series, rf_cw
+) -> None:
+    """Log the final adjusted training weight coefficients to the console.
+
+    Called at the beginning of the fit sequence via formal Python logging so
+    every pipeline run records exactly which coefficients shaped the fit.
+    """
+    y_arr = np.asarray(y)
+    per_class = {
+        int(c): round(float(sample_weight[y_arr == c].mean()), 4)
+        for c in np.unique(y_arr)
+    }
+    precision = draw_stats["draw_precision"]
+    logger.info("=" * 64)
+    logger.info("FIT SEQUENCE: final adjusted training weight coefficients")
+    logger.info("  Ledger feedback  : %s", draw_stats["reason"])
+    logger.info(
+        "  Settled entries  : %d (window %d, Draw picks %d)",
+        draw_stats["settled_entries"],
+        draw_stats["window_entries"],
+        draw_stats["draw_predictions"],
+    )
+    logger.info(
+        "  Draw precision   : %s",
+        "n/a" if precision is None else f"{precision:.1%}",
+    )
+    logger.info("  XGBoost sample_weight per class : %s", per_class)
+    logger.info("  RandomForest class_weight       : %s", rf_cw)
+    logger.info("=" * 64)
 
 
 def tune_model(
@@ -334,16 +504,28 @@ def evaluate(name: str, model, y_true: pd.Series, X_test: pd.DataFrame) -> dict:
 
 
 def main() -> int:
-    """Entry point: load data, tune both models, report, persist the best."""
+    """Entry point: read ledger feedback, tune models, persist the best."""
+    # 1) Dynamic ledger read: MUST precede training-matrix initialization so
+    #    settled financial performance can steer this run's coefficients.
+    draw_stats = read_draw_performance()
+    draw_multiplier = DRAW_PENALTY_FACTOR if draw_stats["adjust"] else 1.0
+
     X_train, y_train, X_test, y_test = load_processed()
 
     # Balanced sample weights give the underrepresented Draw class more
     # mathematical significance inside XGBoost's objective (Random Forest gets
-    # its balancing from class_weight="balanced").
-    sample_weights = {"sample_weight": balanced_sample_weights(y_train)}
+    # its balancing from class_weight). Both carry the ledger-driven Draw
+    # multiplier when the feedback mechanism triggers.
+    sample_weight = balanced_sample_weights(y_train, draw_multiplier)
+    rf_cw = rf_class_cost(y_train, draw_multiplier)
+    sample_weights = {"sample_weight": sample_weight}
+
+    # 3) Formal logging of the final adjusted coefficients at the start of
+    #    the fit sequence.
+    log_training_coefficients(draw_stats, sample_weight, y_train, rf_cw)
 
     results = []
-    for name, (estimator, space) in build_search_spaces().items():
+    for name, (estimator, space) in build_search_spaces(rf_cw).items():
         kwargs = sample_weights if name == "XGBoost" else None
         best_est = tune_model(
             name, estimator, space, X_train, y_train, fit_kwargs=kwargs
