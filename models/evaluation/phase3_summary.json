@@ -1,0 +1,150 @@
+{
+  "generated_at": "2026-11-07T15:34:29+00:00",
+  "model_version": "phase3-20261107T153429Z",
+  "production_model_version": "random_forest-20261105T224238Z",
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "best_validation": {
+    "model": "Market odds",
+    "n_samples": 380,
+    "accuracy": 0.55,
+    "log_loss": 0.9636644004887207,
+    "brier_score": 0.5710378212308005,
+    "macro_f1": 0.3876468871664567,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.044883616713948395,
+    "pred_share_home": 0.7368421052631579,
+    "pred_share_draw": 0.0,
+    "pred_share_away": 0.2631578947368421,
+    "split": "validation",
+    "model_family": "market",
+    "feature_set": "market_odds",
+    "parameters": "{\"overround\": \"removed by row normalisation\"}"
+  },
+  "best_test": {
+    "model": "Market odds",
+    "n_samples": 109,
+    "accuracy": 0.5688073394495413,
+    "log_loss": 0.9192022980608521,
+    "brier_score": 0.5417784750788126,
+    "macro_f1": 0.42125252525252527,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.08914761485945101,
+    "pred_share_home": 0.6880733944954128,
+    "pred_share_draw": 0.0,
+    "pred_share_away": 0.3119266055045872,
+    "split": "test",
+    "model_family": "market",
+    "feature_set": "market_odds",
+    "parameters": "{\"overround\": \"removed by row normalisation\"}"
+  },
+  "market_test_log_loss": 0.9192022980608521,
+  "best_model_beats_market_test": false,
+  "production_comparison": {
+    "random_forest_validation_log_loss": 1.0131205191795634,
+    "dynamic_elo_validation_log_loss": 0.9802781669985072,
+    "dynamic_elo_test_log_loss": 0.9243883735512458,
+    "random_forest_test_log_loss": 0.9836637881033709,
+    "note": "Dynamic Elo and the validation-weighted ensemble beat the current Random Forest reference, but neither beats market odds. No automatic production change is made."
+  },
+  "ensemble": {
+    "weights": {
+      "XGBoost": 0.2,
+      "Dynamic Elo": 0.7,
+      "Independent Poisson": 0.1
+    },
+    "all_weights": {
+      "Random Forest": 0.0,
+      "XGBoost": 0.2,
+      "Dynamic Elo": 0.7,
+      "Independent Poisson": 0.1
+    },
+    "validation_log_loss": 0.9755996277811716,
+    "validation_brier_score": 0.5781769453772206,
+    "equal_validation_log_loss": 0.9820310518709852
+  },
+  "elo_params": {
+    "draw_base": 0.29999999999999993,
+    "draw_scale": 300.0,
+    "selection": "training log-loss grid; test not used"
+  },
+  "poisson_selected_config": {
+    "max_goals": 10,
+    "half_life_days": 365.0,
+    "prior_strength": 2.0,
+    "min_matches": 3,
+    "dixon_coles": true,
+    "rho_min": -0.15,
+    "rho_max": 0.15,
+    "rho_steps": 31,
+    "iterations": 80,
+    "minimum_weight": 0.01
+  },
+  "poisson_rho": 0.010000000000000009,
+  "walk_forward_models": [
+    "Dixon-Coles",
+    "Dynamic Elo",
+    "Independent Poisson",
+    "Logistic regression",
+    "Market odds",
+    "Random Forest",
+    "XGBoost"
+  ],
+  "market_stack": [
+    {
+      "model": "Market + RF/XGB/Elo/Poisson stack",
+      "n_samples": 109,
+      "accuracy": 0.5779816513761468,
+      "log_loss": 0.9167450771548852,
+      "brier_score": 0.5420677672560884,
+      "macro_f1": 0.4776256830601093,
+      "draw_recall": 0.1111111111111111,
+      "draw_precision": 0.6,
+      "ece": 0.0906952910734241,
+      "pred_share_home": 0.6880733944954128,
+      "pred_share_draw": 0.045871559633027525,
+      "pred_share_away": 0.26605504587155965,
+      "market_log_loss": 0.9192022980608521,
+      "market_brier_score": 0.5417784750788126,
+      "delta_log_loss_vs_market": -0.002457220905966895,
+      "delta_brier_vs_market": 0.0002892921772758017,
+      "components": "Random Forest+XGBoost+Dynamic Elo+Independent Poisson",
+      "fit_period": "validation",
+      "test_used_for_fit": false,
+      "delta_log_loss_ci_low": -0.029938914774684515,
+      "delta_log_loss_ci_high": 0.027916999638682147
+    }
+  ],
+  "uncertainty": {
+    "n": 109,
+    "level_counts": {
+      "high": 76,
+      "low": 23,
+      "medium": 10
+    },
+    "mean_confidence": 0.5155376668138443,
+    "mean_entropy": 0.8995304104420712,
+    "mean_agreement": 0.8781233932302633,
+    "high_uncertainty_share": 0.6972477064220184,
+    "reliability_counts": {
+      "high": 77,
+      "low": 32
+    },
+    "correlation_entropy_loss": 0.4665554628857381,
+    "correlation_agreement_loss": -0.22669817440459641,
+    "mean_loss_by_level": {
+      "high": 1.0800005955221599,
+      "low": 0.4466975076082324,
+      "medium": 0.8787566381811367
+    },
+    "accuracy_by_level": {
+      "high": 0.42105263157894735,
+      "low": 0.9130434782608695,
+      "medium": 0.7
+    },
+    "note": "Uncertainty levels are descriptive diagnostics, not calibrated confidence intervals. High probability is not certainty."
+  },
+  "test_used_for_selection": false,
+  "deployment_decision": "No experimental model promoted. Current production model preserved."
+}

@@ -1,0 +1,382 @@
+{
+  "model_version": "random_forest-20261105T224238Z",
+  "generated_at": "2026-11-06T17:42:45+00:00",
+  "baseline_test": [
+    {
+      "model": "Market odds",
+      "n_samples": 109,
+      "accuracy": 0.5688073394495413,
+      "log_loss": 0.9192022980608521,
+      "brier_score": 0.5417784750788126,
+      "macro_f1": 0.42125252525252527,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.08914761485945101,
+      "pred_share_home": 0.6880733944954128,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.3119266055045872,
+      "evaluation": "test"
+    },
+    {
+      "model": "Logistic regression",
+      "n_samples": 109,
+      "accuracy": 0.5045871559633027,
+      "log_loss": 0.9608351983169426,
+      "brier_score": 0.567945210650354,
+      "macro_f1": 0.5022747367574955,
+      "draw_recall": 0.5185185185185185,
+      "draw_precision": 0.358974358974359,
+      "ece": 0.11441794558892858,
+      "pred_share_home": 0.3394495412844037,
+      "pred_share_draw": 0.3577981651376147,
+      "pred_share_away": 0.30275229357798167,
+      "evaluation": "test"
+    },
+    {
+      "model": "Random Forest (ML)",
+      "n_samples": 109,
+      "accuracy": 0.5045871559633027,
+      "log_loss": 0.9836637881033711,
+      "brier_score": 0.5811321169761982,
+      "macro_f1": 0.5047882486927516,
+      "draw_recall": 0.5555555555555556,
+      "draw_precision": 0.36585365853658536,
+      "ece": 0.08883118513627294,
+      "pred_share_home": NaN,
+      "pred_share_draw": NaN,
+      "pred_share_away": NaN,
+      "evaluation": NaN
+    },
+    {
+      "model": "XGBoost (ML)",
+      "n_samples": 109,
+      "accuracy": 0.5137614678899083,
+      "log_loss": 1.0223750426327773,
+      "brier_score": 0.5985061957887792,
+      "macro_f1": 0.4861051322523557,
+      "draw_recall": 0.2962962962962963,
+      "draw_precision": 0.38095238095238093,
+      "ece": 0.11554042272555831,
+      "pred_share_home": NaN,
+      "pred_share_draw": NaN,
+      "pred_share_away": NaN,
+      "evaluation": NaN
+    },
+    {
+      "model": "Historical frequencies",
+      "n_samples": 109,
+      "accuracy": 0.45871559633027525,
+      "log_loss": 1.064136054241573,
+      "brier_score": 0.6427553432107548,
+      "macro_f1": 0.20964360587002095,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.013809753742153614,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "test"
+    },
+    {
+      "model": "Home always",
+      "n_samples": 109,
+      "accuracy": 0.45871559633027525,
+      "log_loss": 14.956240787520954,
+      "brier_score": 1.0825688073394495,
+      "macro_f1": 0.20964360587002095,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.36085626911314983,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "test"
+    },
+    {
+      "model": "Majority class",
+      "n_samples": 109,
+      "accuracy": 0.45871559633027525,
+      "log_loss": 14.956240787520954,
+      "brier_score": 1.0825688073394495,
+      "macro_f1": 0.20964360587002095,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.36085626911314983,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "test"
+    }
+  ],
+  "baseline_validation": [
+    {
+      "model": "Market odds",
+      "n_samples": 380,
+      "accuracy": 0.55,
+      "log_loss": 0.9636644004887207,
+      "brier_score": 0.5710378212308005,
+      "macro_f1": 0.3876468871664567,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.044883616713948395,
+      "pred_share_home": 0.7368421052631579,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.2631578947368421,
+      "evaluation": "validation"
+    },
+    {
+      "model": "Random Forest (ML)",
+      "n_samples": 380,
+      "accuracy": 0.45789473684210524,
+      "log_loss": 1.0131205191795636,
+      "brier_score": 0.602694283295263,
+      "macro_f1": 0.449901321053883,
+      "draw_recall": 0.44086021505376344,
+      "draw_precision": 0.29285714285714287,
+      "ece": 0.09668468658995409,
+      "pred_share_home": NaN,
+      "pred_share_draw": NaN,
+      "pred_share_away": NaN,
+      "evaluation": NaN
+    },
+    {
+      "model": "Logistic regression",
+      "n_samples": 380,
+      "accuracy": 0.4868421052631579,
+      "log_loss": 1.029468585424342,
+      "brier_score": 0.6065363764615037,
+      "macro_f1": 0.4755843160005246,
+      "draw_recall": 0.4731182795698925,
+      "draw_precision": 0.3076923076923077,
+      "ece": 0.10443557990013308,
+      "pred_share_home": 0.3447368421052632,
+      "pred_share_draw": 0.3763157894736842,
+      "pred_share_away": 0.2789473684210526,
+      "evaluation": "validation"
+    },
+    {
+      "model": "Historical frequencies",
+      "n_samples": 380,
+      "accuracy": 0.48947368421052634,
+      "log_loss": 1.0508862823270697,
+      "brier_score": 0.6332409972299169,
+      "macro_f1": 0.21908127208480566,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.03157894736842114,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "validation"
+    },
+    {
+      "model": "XGBoost (ML)",
+      "n_samples": 380,
+      "accuracy": 0.46578947368421053,
+      "log_loss": 1.0525969442603418,
+      "brier_score": 0.6268273826215901,
+      "macro_f1": 0.4477053140096618,
+      "draw_recall": 0.3763440860215054,
+      "draw_precision": 0.29914529914529914,
+      "ece": 0.10933168110416666,
+      "pred_share_home": NaN,
+      "pred_share_draw": NaN,
+      "pred_share_away": NaN,
+      "evaluation": NaN
+    },
+    {
+      "model": "Home always",
+      "n_samples": 380,
+      "accuracy": 0.48947368421052634,
+      "log_loss": 14.106363411816154,
+      "brier_score": 1.0210526315789474,
+      "macro_f1": 0.21908127208480566,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.34035087719298246,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "validation"
+    },
+    {
+      "model": "Majority class",
+      "n_samples": 380,
+      "accuracy": 0.48947368421052634,
+      "log_loss": 14.106363411816154,
+      "brier_score": 1.0210526315789474,
+      "macro_f1": 0.21908127208480566,
+      "draw_recall": 0.0,
+      "draw_precision": 0.0,
+      "ece": 0.34035087719298246,
+      "pred_share_home": 1.0,
+      "pred_share_draw": 0.0,
+      "pred_share_away": 0.0,
+      "evaluation": "validation"
+    }
+  ],
+  "feature_recommendation": {
+    "recommended_feature_set": "base_19",
+    "reason": "No candidate produced a statistically credible improvement for both models on validation and walk-forward; the deployed 19-feature set is retained.",
+    "retained": null,
+    "head_to_head_evidence": [
+      {
+        "model": "Random Forest",
+        "delta_validation_log_loss": -0.005370712129273203,
+        "delta_validation_ci_low": -0.012503135450899941,
+        "delta_validation_ci_high": 0.0010706907062305027,
+        "delta_walk_forward_log_loss": -0.0035221830781759778
+      },
+      {
+        "model": "XGBoost",
+        "delta_validation_log_loss": -0.01458759758502537,
+        "delta_validation_ci_low": -0.03359898577992199,
+        "delta_validation_ci_high": 0.002986868656612919,
+        "delta_walk_forward_log_loss": -0.008435002007247672
+      }
+    ],
+    "head_to_head_justified": false,
+    "rule": "Validation log-loss, mean walk-forward log-loss, and the 95% paired validation bootstrap upper bound must all improve for both Random Forest and XGBoost.",
+    "feature_groups": {
+      "long_form": [
+        "home_form10_goals_scored",
+        "home_form10_goals_conceded",
+        "home_form10_shots",
+        "away_form10_goals_scored",
+        "away_form10_goals_conceded",
+        "away_form10_shots"
+      ],
+      "venue_form": [
+        "home_venue_form_goals_scored",
+        "home_venue_form_goals_conceded",
+        "home_venue_form_points",
+        "away_venue_form_goals_scored",
+        "away_venue_form_goals_conceded",
+        "away_venue_form_points"
+      ],
+      "goal_trends": [
+        "home_attack_trend_3v5",
+        "home_defense_trend_3v5",
+        "away_attack_trend_3v5",
+        "away_defense_trend_3v5"
+      ],
+      "rest_detail": [
+        "home_rest_days_clean",
+        "away_rest_days_clean",
+        "rest_difference"
+      ],
+      "elo": [
+        "home_elo_pre",
+        "away_elo_pre",
+        "elo_difference"
+      ],
+      "strength_of_opposition": [
+        "home_sos_elo_5",
+        "away_sos_elo_5",
+        "sos_elo_difference"
+      ],
+      "head_to_head": [
+        "h2h_home_points_5",
+        "h2h_home_goal_diff_5"
+      ]
+    },
+    "test_used_for_selection": false
+  },
+  "calibration": {
+    "selected_by_model": {
+      "Random Forest": "sigmoid",
+      "XGBoost": "sigmoid"
+    },
+    "test_used_for_selection": false,
+    "deployment_note": "Calibration comparison is diagnostic. No calibrator is applied automatically by this experiment run. On test, the validation-selected calibrator collapses draw recall to about zero for Random Forest, XGBoost. Treat that as a decision-quality regression even where log-loss/Brier improve.",
+    "draw_recall_collapse": [
+      "Random Forest",
+      "XGBoost"
+    ]
+  },
+  "top_permutation_features": [
+    {
+      "model": "XGBoost",
+      "feature": "implied_prob_away",
+      "importance_mean": 0.049410080909729
+    },
+    {
+      "model": "XGBoost",
+      "feature": "implied_prob_draw",
+      "importance_mean": 0.035258740186691284
+    },
+    {
+      "model": "Random Forest",
+      "feature": "implied_prob_home",
+      "importance_mean": 0.025190095571304416
+    },
+    {
+      "model": "Random Forest",
+      "feature": "implied_prob_away",
+      "importance_mean": 0.02287388425735525
+    },
+    {
+      "model": "XGBoost",
+      "feature": "home_form_total_shots",
+      "importance_mean": 0.019220799207687378
+    },
+    {
+      "model": "Random Forest",
+      "feature": "implied_prob_draw",
+      "importance_mean": 0.010333998208637517
+    },
+    {
+      "model": "XGBoost",
+      "feature": "away_form_shots_on_target",
+      "importance_mean": 0.006499171257019043
+    },
+    {
+      "model": "XGBoost",
+      "feature": "home_form_goals_scored",
+      "importance_mean": 0.004232251644134521
+    },
+    {
+      "model": "XGBoost",
+      "feature": "implied_prob_home",
+      "importance_mean": 0.0032791376113891603
+    },
+    {
+      "model": "XGBoost",
+      "feature": "home_short_goals_conceded",
+      "importance_mean": 0.002193856239318848
+    },
+    {
+      "model": "Random Forest",
+      "feature": "home_form_total_shots",
+      "importance_mean": 0.0021035381625846396
+    },
+    {
+      "model": "XGBoost",
+      "feature": "home_goal_diff_5m",
+      "importance_mean": 0.001723635196685791
+    },
+    {
+      "model": "Random Forest",
+      "feature": "home_form_shots_on_target",
+      "importance_mean": 0.001416404735454424
+    },
+    {
+      "model": "Random Forest",
+      "feature": "home_form_goals_scored",
+      "importance_mean": 0.0010734519187947545
+    },
+    {
+      "model": "Random Forest",
+      "feature": "away_form_shots_on_target",
+      "importance_mean": 0.0005459792396031116
+    },
+    {
+      "model": "Random Forest",
+      "feature": "home_goal_diff_5m",
+      "importance_mean": 0.00029797457093058146
+    }
+  ],
+  "test_used_for_feature_selection": false,
+  "test_used_for_calibration_selection": false,
+  "monitoring_overall_status": "insufficient_data"
+}

@@ -1,0 +1,15 @@
+.git
+.gitignore
+.github
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ipynb_checkpoints
+logs
+reports/*.tmp
+data/processed/*.tmp
+.env
+.streamlit/secrets.toml
+notebooks

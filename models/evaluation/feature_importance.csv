@@ -1,0 +1,39 @@
+model,feature,importance
+Random Forest,implied_prob_home,0.2111716006096099
+Random Forest,implied_prob_away,0.20000454081398414
+Random Forest,implied_prob_draw,0.08456245358996956
+Random Forest,home_form_shots_on_target,0.0530179442884748
+Random Forest,home_form_total_shots,0.05285809344913442
+Random Forest,home_goal_diff_5m,0.05258020866136347
+Random Forest,away_form_total_shots,0.05134701710936122
+Random Forest,away_goal_diff_5m,0.04320626086803575
+Random Forest,home_form_goals_scored,0.04296018489082152
+Random Forest,away_form_shots_on_target,0.03943854060089647
+Random Forest,away_form_goals_scored,0.03189047514462649
+Random Forest,away_short_goals_scored,0.027077746202706664
+Random Forest,away_form_goals_conceded,0.026433602857042545
+Random Forest,home_form_goals_conceded,0.024946332477176893
+Random Forest,away_short_goals_conceded,0.020157384881065485
+Random Forest,home_short_goals_scored,0.0180810316790778
+Random Forest,home_short_goals_conceded,0.01678381765631813
+Random Forest,short_rest_advantage,0.003482764220334785
+Random Forest,home_advantage,0.0
+XGBoost,implied_prob_home,0.11366307735443115
+XGBoost,implied_prob_away,0.10761261731386185
+XGBoost,implied_prob_draw,0.06300723552703857
+XGBoost,home_goal_diff_5m,0.054375872015953064
+XGBoost,home_form_total_shots,0.052152469754219055
+XGBoost,home_form_goals_scored,0.05103608965873718
+XGBoost,away_form_total_shots,0.05042487755417824
+XGBoost,away_form_shots_on_target,0.04980853199958801
+XGBoost,home_short_goals_conceded,0.04922012984752655
+XGBoost,home_form_shots_on_target,0.04914560914039612
+XGBoost,away_short_goals_scored,0.0488400012254715
+XGBoost,away_short_goals_conceded,0.048225633800029755
+XGBoost,away_goal_diff_5m,0.04797336831688881
+XGBoost,away_form_goals_scored,0.046998556703329086
+XGBoost,home_form_goals_conceded,0.046090267598629
+XGBoost,away_form_goals_conceded,0.04592433199286461
+XGBoost,home_short_goals_scored,0.043667927384376526
+XGBoost,short_rest_advantage,0.03183341771364212
+XGBoost,home_advantage,0.0

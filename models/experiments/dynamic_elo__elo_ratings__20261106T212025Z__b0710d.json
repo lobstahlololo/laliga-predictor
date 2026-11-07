@@ -1,0 +1,70 @@
+{
+  "experiment_id": "dynamic_elo__elo_ratings__20261106T212025Z__b0710d",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Dynamic Elo",
+  "model_family": "elo",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "elo_ratings",
+  "variant": "phase3",
+  "features": [
+    "home_elo_pre",
+    "away_elo_pre",
+    "elo_difference",
+    "home_elo_rd",
+    "away_elo_rd",
+    "elo_rd_difference",
+    "home_elo_matches",
+    "away_elo_matches",
+    "elo_expected_home"
+  ],
+  "feature_count": 9,
+  "feature_hash": "a727965d9075e607",
+  "hyperparameters": {
+    "initial_rating": 1500.0,
+    "initial_rating_deviation": 350.0,
+    "minimum_rating_deviation": 40.0,
+    "k_factor": 20.0,
+    "home_advantage": 60.0,
+    "mov_enabled": true,
+    "mov_cap": 3.0,
+    "uncertainty_horizon_days": 365.0,
+    "inactivity_inflation": 50.0,
+    "rd_shrink": 800.0,
+    "draw_base": 0.29999999999999993,
+    "draw_scale": 300.0,
+    "selection": "training log-loss grid; test not used"
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.5236842105263158,
+    "log_loss": 0.9802781669985072,
+    "brier_score": 0.5812094843779658,
+    "macro_f1": 0.36579619783770706,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.03769755881496066,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5504587155963303,
+    "log_loss": 0.9243883735512458,
+    "brier_score": 0.5430596509065687,
+    "macro_f1": 0.40445942442312677,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.06349563628996929,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "experimental_not_deployed",
+  "notes": "Standalone Elo; draw mapping fitted on training log-loss. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

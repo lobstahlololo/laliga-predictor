@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-11-07T15:42:02+00:00",
+  "updated_at": "2026-11-07T15:42:02+00:00",
+  "production": "random_forest-20261105T224238Z",
+  "production_since": "2026-11-07T15:42:02+00:00",
+  "production_history": [],
+  "versions": {
+    "random_forest-20261105T224238Z": {
+      "version": "random_forest-20261105T224238Z",
+      "model_family": "Random Forest",
+      "created_at": "2026-11-05T22:42:38.442282+00:00",
+      "registered_at": "2026-11-07T15:42:02+00:00",
+      "status": "production",
+      "artifact": "models\\registry\\versions\\random_forest-20261105T224238Z\\model.pkl",
+      "artifact_sha256": "62267115e37e01ad297f4536b810f8bc270111928cdcd70ae020f72797c4db2e",
+      "preprocessor": "models\\registry\\versions\\random_forest-20261105T224238Z\\preprocessor.joblib",
+      "metadata_snapshot": "models\\registry\\versions\\random_forest-20261105T224238Z\\metadata.json",
+      "feature_names": [
+        "away_form_goals_conceded",
+        "away_form_goals_scored",
+        "away_form_shots_on_target",
+        "away_form_total_shots",
+        "away_short_goals_conceded",
+        "away_short_goals_scored",
+        "home_form_goals_conceded",
+        "home_form_goals_scored",
+        "home_form_shots_on_target",
+        "home_form_total_shots",
+        "home_short_goals_conceded",
+        "home_short_goals_scored",
+        "implied_prob_home",
+        "implied_prob_draw",
+        "implied_prob_away",
+        "home_goal_diff_5m",
+        "away_goal_diff_5m",
+        "short_rest_advantage",
+        "home_advantage"
+      ],
+      "feature_count": 19,
+      "feature_set_hash": "1002699f0ddb35b5",
+      "parameters": {
+        "n_estimators": 200,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "max_depth": 5
+      },
+      "training_period": {
+        "seasons": [
+          "23/24",
+          "24/25"
+        ],
+        "rows": 760,
+        "date_min": "2023-08-11",
+        "date_max": "2025-05-25"
+      },
+      "validation_period": {
+        "seasons": "25/26",
+        "rows": 380,
+        "date_min": null,
+        "date_max": "2026-05-24"
+      },
+      "test_period": {
+        "seasons": "26/27",
+        "rows": 109,
+        "date_min": "2026-08-15",
+        "date_max": "2026-11-02"
+      },
+      "validation_metrics": {
+        "model": "Random Forest",
+        "n_samples": 380,
+        "accuracy": 0.45789473684210524,
+        "log_loss": 1.0131205191795636,
+        "brier_score": 0.602694283295263,
+        "macro_f1": 0.449901321053883,
+        "draw_recall": 0.44086021505376344,
+        "draw_precision": 0.29285714285714287,
+        "ece": 0.09668468658995409
+      },
+      "test_metrics": {
+        "model": "Random Forest",
+        "n_samples": 109,
+        "accuracy": 0.5045871559633027,
+        "log_loss": 0.9836637881033711,
+        "brier_score": 0.5811321169761982,
+        "macro_f1": 0.5047882486927516,
+        "draw_recall": 0.5555555555555556,
+        "draw_precision": 0.36585365853658536,
+        "ece": 0.08883118513627294
+      },
+      "source": "training_artifacts",
+      "promotion": {
+        "promoted_at": "2026-11-07T15:42:02+00:00",
+        "actor": "auto-bootstrap",
+        "reason": "first registered version becomes the initial production model",
+        "evidence": null
+      },
+      "notes": []
+    }
+  }
+}

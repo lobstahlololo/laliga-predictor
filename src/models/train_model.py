@@ -1,98 +1,98 @@
-"""Train and evaluate classifiers for La Liga match outcomes.
+"""Train, select and honestly evaluate La Liga outcome models.
 
-Ingests the standardized train/test CSVs from ``data/processed/`` (produced by
-``src/features/build_features.py``), tunes an XGBoost Classifier and a Random
-Forest Classifier with RandomizedSearchCV, and reports accuracy, log-loss,
-per-class precision/recall/F1 and a confusion matrix (console text plus a
-matplotlib PNG saved to ``models/evaluation/``).
+Methodology (the core of the project):
 
-Scoring/optimization design:
+1. **Seasonal split** — earlier seasons train (23/24 + 24/25), the penultimate
+   season validates (25/26), and the newest season is an untouched test set
+   (26/27).
+2. **Time-ordered tuning** — RandomizedSearchCV uses ``TimeSeriesSplit``
+   (never shuffled folds) and optimises multiclass log-loss.
+3. **Validation-only selection** — the model with the lowest validation
+   log-loss wins (Brier score breaks ties). Accuracy alone is never used.
+4. **One final test score** — both models are refitted on train+validation
+   and scored once on the held-out test season. The winner was already fixed
+   before this score existed.
+5. **Walk-forward backtest** — rolling-origin folds over earlier seasons
+   provide a second, season-by-season view of stability.
 
-* The search refits **strictly on ``neg_log_loss``** — accuracy is logged for
-  context only. Log-loss punishes overconfident models and models that
-  collapse onto majority classes (e.g. never predicting Draw).
-* Class balancing: Random Forest uses ``class_weight="balanced"``; XGBoost is
-  fitted with balanced ``sample_weight`` computed from the training label
-  counts, so the underrepresented Draw class carries proportionally more
-  mathematical weight in the multi:softprob objective.
-* The final winner serialized with joblib is the model with the **lowest
-  log-loss on the held-out test season**.
-* Self-correcting feedback: before the training matrix is initialized the
-  ledger ``data/processed/prediction_history.csv`` is read and the rolling
-  Draw-class precision over the last 30 settled entries is measured. When
-  that precision falls below 25% (the model is overestimating draw edges
-  and losing money on value bets) the Draw class (label 1) coefficients are
-  raised by 15% for both models — XGBoost's per-row ``sample_weight`` and the
-  Random Forest class-cost penalty — so the next optimization loop is more
-  conservative. With fewer than 5 settled entries (brand-new ledger) or a
-  precision at/above the floor, everything runs at the baseline
-  ``balanced_subsample`` state.
-
-The split is time-based: the historical seasons (23/24 + 24/25 + 25/26) form
-the training set and the current 26/27 season is the held-out test set. See
-``src/features/build_features.py`` for where the split is applied.
+Artifacts:
+    models/saved_models/best_model.pkl
+    models/saved_models/model_random_forest.pkl / model_xgboost.pkl
+    models/saved_models/model_metadata.json
+    data/processed/preprocessor.joblib
+    models/evaluation/*.csv, *.png, evaluation_summary.json
 
 Usage:
-    python src/models/train_model.py
+    python -m src.models.train_model
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
-import matplotlib
-
-matplotlib.use("Agg")  # headless-safe rendering
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    classification_report,
-    confusion_matrix,
-    log_loss,
-)
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from xgboost import XGBClassifier
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
-EVAL_DIR = PROJECT_ROOT / "models" / "evaluation"
-SAVED_MODEL_DIR = PROJECT_ROOT / "models" / "saved_models"
-BEST_MODEL_PATH = SAVED_MODEL_DIR / "best_model.pkl"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-X_TRAIN_PATH = PROCESSED_DIR / "X_train_scaled.csv"
-Y_TRAIN_PATH = PROCESSED_DIR / "y_train.csv"
-X_TEST_PATH = PROCESSED_DIR / "X_test_scaled.csv"
-Y_TEST_PATH = PROCESSED_DIR / "y_test.csv"
-
-# Prediction ledger written by predict_upcoming.py / backfill_results.py.
-LEDGER_PATH = PROCESSED_DIR / "prediction_history.csv"
-
-# match_outcome codes -> human-readable labels.
-OUTCOME_LABELS = {2: "Home Win", 1: "Draw", 0: "Away Win"}
-LABEL_ORDER = [2, 1, 0]  # display order: Home Win, Draw, Away Win
-
-RANDOM_STATE = 42
-N_SEARCH_ITER = 40        # RandomizedSearchCV candidates per model
-CV_FOLDS = 5              # stratified folds inside the training window
-SEARCH_JOBS = -1          # parallelize the search itself
-
-# --- Self-correcting ledger feedback ---------------------------------------
-DRAW_CLASS = 1              # match_outcome code for a Draw (class 1)
-DRAW_WINDOW = 30            # rolling window of settled ledger entries
-MIN_SETTLED_ENTRIES = 5     # below this -> baseline adjustment state
-DRAW_PRECISION_FLOOR = 0.25 # below this -> penalize the Draw class
-DRAW_PENALTY_FACTOR = 1.15  # +15% on Draw coefficients when triggered
+from src.evaluation.backtesting import (  # noqa: E402
+    ModelSpec,
+    balanced_sample_weights,
+    run_walk_forward,
+    summarise_walk_forward,
+)
+from src.evaluation.metrics import (  # noqa: E402
+    compare_models,
+    evaluate_probabilities,
+    metrics_to_row,
+)
+from src.evaluation.plots import (  # noqa: E402
+    plot_calibration_curves,
+    plot_confusion_matrix,
+    plot_model_comparison,
+    plot_per_class_metrics,
+    plot_season_performance,
+    plot_walk_forward,
+)
+from src.evaluation.splits import chronological_split  # noqa: E402
+from src.features.build_features import (  # noqa: E402
+    build_model_frame,
+    load_raw,
+    save_feature_reference,
+)
+from src.features.preprocessing import FeaturePreprocessor  # noqa: E402
+from src.utils.config import (  # noqa: E402
+    # Retained as the live deployment targets; training itself only writes
+    # versioned candidates under SAVED_MODEL_DIR.
+    BEST_MODEL_PATH,
+    CV_FOLDS,
+    EVAL_DIR,
+    EVALUATION_REPORT_PATH,
+    FEATURE_COLUMNS,
+    MODEL_COMPARISON_PATH,
+    MODEL_METADATA_PATH,
+    N_SEARCH_ITER,
+    PRIMARY_METRIC,
+    RANDOM_STATE,
+    SAVED_MODEL_DIR,
+    SEASON_METRICS_PATH,
+    TEST_SEASON,
+    TIEBREAK_METRIC,
+    TRAIN_SEASONS,
+    VALIDATION_SEASON,
+    WALK_FORWARD_PATH,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -103,454 +103,518 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Model definitions
 # ---------------------------------------------------------------------------
 
-def load_processed() -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
-    """Load the scaled feature matrices and targets from data/processed/."""
-    missing = [
-        p for p in (X_TRAIN_PATH, Y_TRAIN_PATH, X_TEST_PATH, Y_TEST_PATH)
-        if not p.exists()
-    ]
-    if missing:
-        raise FileNotFoundError(
-            "Missing processed files: "
-            + ", ".join(str(p) for p in missing)
-            + ". Run `python src/features/build_features.py` first."
+def build_estimator(name: str, params: dict | None = None, *, class_weight=None):
+    """Create a model with fixed reproducibility and balancing settings."""
+    params = dict(params or {})
+    if name == "Random Forest":
+        return RandomForestClassifier(
+            **params,
+            class_weight=class_weight or "balanced_subsample",
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
         )
-
-    X_train = pd.read_csv(X_TRAIN_PATH)
-    y_train = pd.read_csv(Y_TRAIN_PATH)["match_outcome"].astype(int)
-    X_test = pd.read_csv(X_TEST_PATH)
-    y_test = pd.read_csv(Y_TEST_PATH)["match_outcome"].astype(int)
-
-    if len(X_train) != len(y_train) or len(X_test) != len(y_test):
-        raise ValueError("Feature matrices and target vectors have mismatched lengths.")
-
-    logger.info(
-        "Loaded data: train=%s (y: %s), test=%s (y: %s)",
-        X_train.shape,
-        y_train.value_counts().sort_index().to_dict(),
-        X_test.shape,
-        y_test.value_counts().sort_index().to_dict(),
-    )
-    return X_train, y_train, X_test, y_test
-
-
-# ---------------------------------------------------------------------------
-# Model search spaces
-# ---------------------------------------------------------------------------
-
-def read_draw_performance() -> dict:
-    """Read the ledger and measure rolling Draw precision over its tail.
-
-    Must run **before** the training matrix is initialized. Filters
-    ``data/processed/prediction_history.csv`` to settled rows (non-blank
-    ``actual_outcome``), keeps the last ``DRAW_WINDOW`` entries and computes
-    Draw-class precision: of the rows whose model argmax was the Draw, the
-    share that actually finished as a Draw.
-
-    Any unusable state — missing/unreadable ledger, missing columns, fewer
-    than ``MIN_SETTLED_ENTRIES`` settled rows (e.g. a brand-new file), no
-    Draw predictions or unparseable cells — degrades gracefully to the
-    baseline adjustment state (``adjust=False``) instead of raising.
-    """
-    stats: dict = {
-        "settled_entries": 0,
-        "window_entries": 0,
-        "draw_predictions": 0,
-        "draw_precision": None,
-        "adjust": False,
-        "reason": "",
-    }
-
-    def baseline(reason: str) -> dict:
-        stats["reason"] = reason
-        logger.info("Draw feedback: %s", reason)
-        return stats
-
-    if not LEDGER_PATH.exists():
-        return baseline(f"ledger {LEDGER_PATH} not found - baseline state")
-
-    try:
-        ledger = pd.read_csv(LEDGER_PATH, dtype=str, keep_default_na=False)
-    except Exception as exc:  # noqa: BLE001 - feedback must never crash training
-        return baseline(f"ledger unreadable ({exc}) - baseline state")
-
-    prob_cols = ["model_prob_home", "model_prob_draw", "model_prob_away"]
-    if "actual_outcome" not in ledger.columns or not all(
-        c in ledger.columns for c in prob_cols
-    ):
-        return baseline("ledger missing required columns - baseline state")
-
-    settled = ledger[ledger["actual_outcome"].astype(str).str.strip() != ""].copy()
-    stats["settled_entries"] = len(settled)
-    if len(settled) < MIN_SETTLED_ENTRIES:
-        return baseline(
-            f"only {len(settled)} settled entries "
-            f"(< {MIN_SETTLED_ENTRIES}) - baseline state"
+    if name == "XGBoost":
+        return XGBClassifier(
+            **params,
+            objective="multi:softprob",
+            num_class=3,
+            eval_metric="mlogloss",
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
         )
-
-    window = settled.tail(DRAW_WINDOW)
-    probs = window[prob_cols].apply(pd.to_numeric, errors="coerce")
-    actual = pd.to_numeric(window["actual_outcome"], errors="coerce")
-    usable = probs.notna().all(axis=1) & actual.notna()
-    probs, actual = probs[usable], actual[usable]
-    stats["window_entries"] = len(probs)
-    if not usable.any():
-        return baseline("no parseable settled rows in window - baseline state")
-
-    # Model's top pick per row over [home, draw, away] -> index 1 == Draw.
-    predicted = probs.to_numpy().argmax(axis=1)
-    draw_mask = predicted == 1
-    n_draw_pred = int(draw_mask.sum())
-    stats["draw_predictions"] = n_draw_pred
-    if n_draw_pred == 0:
-        return baseline("no Draw predictions in window - baseline state")
-
-    precision = float((actual.to_numpy()[draw_mask] == DRAW_CLASS).mean())
-    stats["draw_precision"] = precision
-
-    if precision < DRAW_PRECISION_FLOOR:
-        stats["adjust"] = True
-        stats["reason"] = (
-            f"Draw precision {precision:.1%} < {DRAW_PRECISION_FLOOR:.0%} floor "
-            f"over last {len(probs)} settled entries "
-            f"({n_draw_pred} Draw picks) - applying +"
-            f"{(DRAW_PENALTY_FACTOR - 1) * 100:.0f}% Draw penalty"
-        )
-    else:
-        stats["reason"] = (
-            f"Draw precision {precision:.1%} >= {DRAW_PRECISION_FLOOR:.0%} floor "
-            f"over last {len(probs)} settled entries "
-            f"({n_draw_pred} Draw picks) - baseline weights retained"
-        )
-    logger.info("Draw feedback: %s", stats["reason"])
-    return stats
+    raise ValueError(f"Unknown model name: {name}")
 
 
-def build_search_spaces(rf_class_weight="balanced_subsample") -> dict:
-    """Return {name: (estimator, param_distributions)} for tuning.
-
-    Estimators use n_jobs=1 so the outer RandomizedSearchCV (SEARCH_JOBS=-1)
-    can parallelize across candidates without oversubscribing cores.
-
-    ``rf_class_weight`` is the Random Forest cost penalty: the baseline
-    ``"balanced_subsample"`` string, or an explicit per-class dict when the
-    ledger feedback raised the Draw-class penalty.
-    """
-    # XGBoost: multi:softprob + mlogloss; draw significance comes from the
-    # balanced sample weights supplied at fit time (see balanced_sample_weights).
-    xgb = XGBClassifier(
-        objective="multi:softprob",
-        num_class=3,
-        eval_metric="mlogloss",
-        random_state=RANDOM_STATE,
-        n_jobs=1,
-    )
+def build_search_spaces() -> dict:
+    """Hyperparameter distributions for both candidate models."""
     xgb_space = {
-        "n_estimators": [200, 400, 600, 800],
-        "max_depth": [3, 4, 5, 6, 8],
-        "learning_rate": [0.03, 0.05, 0.08, 0.1, 0.2],
-        "subsample": [0.7, 0.8, 0.9, 1.0],
-        "colsample_bytree": [0.7, 0.8, 0.9, 1.0],
-        "min_child_weight": [1, 3, 5],
-        "reg_lambda": [0.5, 1.0, 2.0],
-        # Caps per-class update weight per step, stabilizing training against
-        # the skewed multi-class (home-heavy) distribution.
-        "max_delta_step": list(range(1, 6)),  # integers 1..5
+        "n_estimators": [200, 400, 600],
+        "max_depth": [3, 4, 5, 6],
+        "learning_rate": [0.03, 0.05, 0.08, 0.1],
+        "subsample": [0.8, 0.9, 1.0],
+        "colsample_bytree": [0.8, 0.9, 1.0],
+        "min_child_weight": [1, 3],
+        "reg_lambda": [1.0, 2.0],
+        "max_delta_step": [1, 3, 5],
     }
-
-    # Random Forest: per-bag class balancing so Draw is never free to ignore.
-    rf = RandomForestClassifier(
-        class_weight=rf_class_weight,
-        random_state=RANDOM_STATE,
-        n_jobs=1,
-    )
     rf_space = {
-        "n_estimators": [200, 400, 600, 800],
-        "max_depth": [None, 5, 10, 20, 30],
+        "n_estimators": [200, 400, 600],
+        "max_depth": [None, 5, 10, 20],
         "min_samples_leaf": [1, 2, 4],
         "max_features": ["sqrt", 0.5, None],
     }
-
     return {
-        "XGBoost": (xgb, xgb_space),
-        "Random Forest": (rf, rf_space),
+        "XGBoost": (build_estimator("XGBoost"), xgb_space),
+        "Random Forest": (build_estimator("Random Forest"), rf_space),
     }
 
 
-def balanced_sample_weights(y: pd.Series, draw_multiplier: float = 1.0) -> np.ndarray:
-    """Inverse-frequency sample weights: n / (n_classes * class_count).
-
-    ``draw_multiplier`` scales the Draw class (1) coefficient: 1.0 keeps the
-    baseline, 1.15 applies the ledger-driven +15% penalty.
-    """
-    y_arr = np.asarray(y)
-    classes, counts = np.unique(y_arr, return_counts=True)
-    weight_map = {
-        c: len(y_arr) / (len(classes) * cnt) for c, cnt in zip(classes, counts)
-    }
-    if draw_multiplier != 1.0 and DRAW_CLASS in weight_map:
-        weight_map[DRAW_CLASS] *= draw_multiplier
-    weights = np.array([weight_map[v] for v in y_arr], dtype=float)
-    logger.info(
-        "Balanced sample weights per class%s: %s",
-        " (Draw-adjusted)" if draw_multiplier != 1.0 else "",
-        {int(c): round(weight_map[c], 3) for c in classes},
+def spec_from_params(name: str, params: dict) -> ModelSpec:
+    """Wrap a tuned parameter set in a fresh-model factory."""
+    return ModelSpec(
+        name=name,
+        factory=lambda: build_estimator(name, params),
+        uses_sample_weight=(name == "XGBoost"),
     )
-    return weights
 
 
-def rf_class_cost(y: pd.Series, draw_multiplier: float = 1.0):
-    """Random Forest class-cost penalty for the current feedback state.
-
-    Baseline is the ``"balanced_subsample"`` string. When the ledger
-    feedback triggers, returns an explicit balanced per-class dict with the
-    Draw class (1) scaled by ``draw_multiplier`` (1.15 = +15% cost penalty).
-    """
-    if draw_multiplier == 1.0:
-        return "balanced_subsample"
-    y_arr = np.asarray(y)
-    classes, counts = np.unique(y_arr, return_counts=True)
-    cost = {
-        int(c): len(y_arr) / (len(classes) * cnt) for c, cnt in zip(classes, counts)
-    }
-    cost[DRAW_CLASS] = cost.get(DRAW_CLASS, 1.0) * draw_multiplier
-    logger.info("Random Forest Draw-adjusted class cost: %s", cost)
-    return cost
-
-
-def log_training_coefficients(
-    draw_stats: dict, sample_weight: np.ndarray, y: pd.Series, rf_cw
-) -> None:
-    """Log the final adjusted training weight coefficients to the console.
-
-    Called at the beginning of the fit sequence via formal Python logging so
-    every pipeline run records exactly which coefficients shaped the fit.
-    """
-    y_arr = np.asarray(y)
-    per_class = {
-        int(c): round(float(sample_weight[y_arr == c].mean()), 4)
-        for c in np.unique(y_arr)
-    }
-    precision = draw_stats["draw_precision"]
-    logger.info("=" * 64)
-    logger.info("FIT SEQUENCE: final adjusted training weight coefficients")
-    logger.info("  Ledger feedback  : %s", draw_stats["reason"])
-    logger.info(
-        "  Settled entries  : %d (window %d, Draw picks %d)",
-        draw_stats["settled_entries"],
-        draw_stats["window_entries"],
-        draw_stats["draw_predictions"],
-    )
-    logger.info(
-        "  Draw precision   : %s",
-        "n/a" if precision is None else f"{precision:.1%}",
-    )
-    logger.info("  XGBoost sample_weight per class : %s", per_class)
-    logger.info("  RandomForest class_weight       : %s", rf_cw)
-    logger.info("=" * 64)
-
+# ---------------------------------------------------------------------------
+# Tuning
+# ---------------------------------------------------------------------------
 
 def tune_model(
     name: str,
     estimator,
     space: dict,
-    X_train,
-    y_train,
-    fit_kwargs: dict | None = None,
-):
-    """Run RandomizedSearchCV optimizing cross-validated ``neg_log_loss``.
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    n_search_iter: int = N_SEARCH_ITER,
+    cv_folds: int = CV_FOLDS,
+) -> tuple[dict, dict]:
+    """Time-ordered randomized search optimising cross-validated log-loss.
 
-    ``fit_kwargs`` allows passing balanced ``sample_weight`` (XGBoost);
-    RandomForest balancing is handled via its ``class_weight`` parameter.
+    Rows are already chronological. ``TimeSeriesSplit`` only ever validates on
+    the future of each training fold, so the search cannot peek forwards.
     """
+    fit_kwargs = (
+        {"sample_weight": balanced_sample_weights(y_train)}
+        if name == "XGBoost" else {}
+    )
+    cv = TimeSeriesSplit(n_splits=cv_folds)
     search = RandomizedSearchCV(
         estimator=estimator,
         param_distributions=space,
-        n_iter=N_SEARCH_ITER,
-        scoring={
-            "log_loss": "neg_log_loss",   # primary: the optimization target
-            "accuracy": "accuracy",       # diagnostics only, never refit on
-        },
-        refit="log_loss",  # strictly: pick/refit the best by lowest CV log-loss
-        cv=StratifiedKFold(
-            n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE
-        ),
+        n_iter=n_search_iter,
+        scoring={"log_loss": "neg_log_loss", "accuracy": "accuracy"},
+        refit="log_loss",
+        cv=cv,
         random_state=RANDOM_STATE,
-        n_jobs=SEARCH_JOBS,
+        n_jobs=-1,
         verbose=0,
-        return_train_score=False,
+        error_score="raise",
     )
     logger.info(
-        "Tuning %s (%d candidates, %d-fold stratified CV, refit on neg_log_loss)...",
-        name, N_SEARCH_ITER, CV_FOLDS,
+        "Tuning %s: %d candidates, %d time-ordered folds, metric=neg_log_loss",
+        name, n_search_iter, cv_folds,
     )
-    search.fit(X_train, y_train, **(fit_kwargs or {}))
+    search.fit(X_train, y_train, **fit_kwargs)
+    best_idx = int(search.best_index_)
+    info = {
+        "params": {k: _jsonable(v) for k, v in search.best_params_.items()},
+        "cv_log_loss": float(-search.best_score_),
+        "cv_accuracy": float(search.cv_results_["mean_test_accuracy"][best_idx]),
+        "cv_folds": cv_folds,
+        "n_candidates": n_search_iter,
+    }
     logger.info(
-        "%s best params: %s", name,
-        {k: v for k, v in sorted(search.best_params_.items())},
+        "%s best params: %s | CV log-loss=%.4f acc=%.4f",
+        name, info["params"], info["cv_log_loss"], info["cv_accuracy"],
     )
-    logger.info(
-        "%s best CV log-loss=%.4f, CV accuracy=%.4f",
-        name,
-        -search.best_score_,  # refit metric is neg_log_loss
-        search.cv_results_["mean_test_accuracy"][
-            int(search.best_index_)
-        ],
-    )
-    return search.best_estimator_
+    return info["params"], info
 
 
 # ---------------------------------------------------------------------------
-# Evaluation
+# Training / selection
 # ---------------------------------------------------------------------------
 
-def plot_confusion_matrix(
-    cm: pd.DataFrame, model_name: str, accuracy: float
-) -> Path:
-    """Render a confusion matrix PNG with raw counts *and* row-wise
-    percentage distributions overlaid on every cell."""
-    fig, ax = plt.subplots(figsize=(6, 5))
-    im = ax.imshow(cm.values, interpolation="nearest", cmap=plt.cm.Blues)
-    ax.figure.colorbar(im, ax=ax)
-    ax.set(
-        xticks=range(len(cm.columns)),
-        yticks=range(len(cm.index)),
-        xticklabels=cm.columns,
-        yticklabels=cm.index,
-        ylabel="Actual",
-        xlabel="Predicted",
-        title=f"{model_name} — Confusion Matrix (acc={accuracy:.3f})",
-    )
-
-    # Annotate each cell with the raw count and the row-wise percentage
-    # distribution (share of the actual class predicted as this column).
-    counts = cm.values.astype(int)
-    row_totals = counts.sum(axis=1, keepdims=True)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        row_pct = np.where(
-            row_totals > 0, counts / row_totals * 100.0, 0.0
-        )
-    thresh = counts.max() / 2 if counts.max() > 0 else 0.5
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(
-                j, i, f"{counts[i, j]}\n({row_pct[i, j]:.1f}%)",
-                ha="center", va="center", fontsize=9,
-                color="white" if counts[i, j] > thresh else "black",
-            )
-
-    fig.tight_layout()
-    EVAL_DIR.mkdir(parents=True, exist_ok=True)
-    path = EVAL_DIR / f"confusion_matrix_{'_'.join(model_name.lower().split())}.png"
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    return path
+def _jsonable(value):
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
+    return value
 
 
-def evaluate(name: str, model, y_true: pd.Series, X_test: pd.DataFrame) -> dict:
-    """Score one tuned model: accuracy, log-loss, report, confusion matrix."""
-    y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)
-
-    accuracy = accuracy_score(y_true, y_pred)
-    # Log-loss measures probabilistic confidence; classes absent from the
-    # test fold would break alignment, so map labels to column indexes.
-    class_index = {c: i for i, c in enumerate(model.classes_)}
-    labels_present = sorted(set(y_true) | set(y_pred))
-    proba_cols = [class_index[c] for c in labels_present if c in class_index]
-    ll = log_loss(
-        y_true,
-        y_proba[:, proba_cols],
-        labels=labels_present,
-    )
-
-    labels = [l for l in LABEL_ORDER if l in set(y_true) | set(y_pred)]
-    target_names = [OUTCOME_LABELS[l] for l in labels]
-
-    report = classification_report(
-        y_true, y_pred,
-        labels=labels,
-        target_names=target_names,
-        zero_division=0,
-    )
-    cm = pd.DataFrame(
-        confusion_matrix(y_true, y_pred, labels=labels),
-        index=[f"Actual {n}" for n in target_names],
-        columns=[f"Pred {n}" for n in target_names],
-    )
-
-    print("\n" + "=" * 64)
-    print(f"MODEL: {name} (tuned)")
-    print("=" * 64)
-    print(f"Accuracy:  {accuracy:.4f}")
-    print(f"Log-Loss:  {ll:.4f}  (lower = better calibrated probabilities)")
-    print("\nPrecision / Recall / F1 per class:")
-    print(report)
-    print("Confusion matrix:")
-    print(cm.to_string())
-
-    path = plot_confusion_matrix(cm, name, accuracy)
-    print(f"Confusion matrix figure saved to: {path}")
+def _scalar_metrics(metrics: dict) -> dict:
     return {
-        "model": name,
-        "accuracy": accuracy,
-        "log_loss": ll,
-        "confusion_matrix": cm,
-        "estimator": model,
+        k: _jsonable(v)
+        for k, v in metrics.items()
+        if not isinstance(v, (pd.DataFrame, list, dict, np.ndarray))
+        and not k.startswith("_")
     }
 
 
-def main() -> int:
-    """Entry point: read ledger feedback, tune models, persist the best."""
-    # 1) Dynamic ledger read: MUST precede training-matrix initialization so
-    #    settled financial performance can steer this run's coefficients.
-    draw_stats = read_draw_performance()
-    draw_multiplier = DRAW_PENALTY_FACTOR if draw_stats["adjust"] else 1.0
-
-    X_train, y_train, X_test, y_test = load_processed()
-
-    # Balanced sample weights give the underrepresented Draw class more
-    # mathematical significance inside XGBoost's objective (Random Forest gets
-    # its balancing from class_weight). Both carry the ledger-driven Draw
-    # multiplier when the feedback mechanism triggers.
-    sample_weight = balanced_sample_weights(y_train, draw_multiplier)
-    rf_cw = rf_class_cost(y_train, draw_multiplier)
-    sample_weights = {"sample_weight": sample_weight}
-
-    # 3) Formal logging of the final adjusted coefficients at the start of
-    #    the fit sequence.
-    log_training_coefficients(draw_stats, sample_weight, y_train, rf_cw)
-
-    results = []
-    for name, (estimator, space) in build_search_spaces(rf_cw).items():
-        kwargs = sample_weights if name == "XGBoost" else None
-        best_est = tune_model(
-            name, estimator, space, X_train, y_train, fit_kwargs=kwargs
-        )
-        results.append(evaluate(name, best_est, y_test, X_test))
-
-    print("\n" + "=" * 64)
-    print("SUMMARY (time-based split: train 23/24+24/25+25/26 -> test 26/27)")
-    print("=" * 64)
-    for res in results:
-        print(
-            f"  {res['model']:<15} accuracy = {res['accuracy']:.4f}   "
-            f"log-loss = {res['log_loss']:.4f}"
-        )
-
-    # Persist the winner: strictly the lowest log-loss on the test season.
-    best = min(results, key=lambda r: r["log_loss"])
-    SAVED_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    joblib.dump(best["estimator"], BEST_MODEL_PATH)
-    print(
-        f"\nBest model: {best['model']} -> saved via joblib to {BEST_MODEL_PATH}"
+def train_and_select(
+    X: pd.DataFrame,
+    y: pd.Series,
+    meta: pd.DataFrame,
+    *,
+    n_search_iter: int = N_SEARCH_ITER,
+    cv_folds: int = CV_FOLDS,
+    save: bool = True,
+) -> dict:
+    """Run tuning, validation selection, final test scoring and backtests."""
+    splits = chronological_split(
+        meta,
+        train_seasons=TRAIN_SEASONS,
+        validation_season=VALIDATION_SEASON,
+        test_season=TEST_SEASON,
     )
+    train_idx = splits["train"].index
+    val_idx = splits["validation"].index
+    test_idx = splits["test"].index
+
+    X_train_raw, y_train = X.loc[train_idx], y.loc[train_idx]
+    X_val_raw, y_val = X.loc[val_idx], y.loc[val_idx]
+    X_test_raw, y_test = X.loc[test_idx], y.loc[test_idx]
+
+    # Preprocessing is fitted on the training window ONLY.
+    train_pre = FeaturePreprocessor(FEATURE_COLUMNS)
+    X_train = train_pre.fit_transform(X_train_raw)
+    X_val = train_pre.transform(X_val_raw)
+
+    tuned: dict[str, dict] = {}
+    validation_results: list[dict] = []
+
+    for name, (estimator, space) in build_search_spaces().items():
+        params, info = tune_model(
+            name, estimator, space, X_train, y_train,
+            n_search_iter=n_search_iter, cv_folds=cv_folds,
+        )
+        tuned[name] = {"params": params, "tuning": info}
+
+        # Validation score for the tuned candidate.
+        model = build_estimator(name, params)
+        if name == "XGBoost":
+            model.fit(X_train, y_train, sample_weight=balanced_sample_weights(y_train))
+        else:
+            model.fit(X_train, y_train)
+        proba = model.predict_proba(X_val)
+        metrics = evaluate_probabilities(y_val, proba, model.classes_, model_name=name)
+        metrics["_y_true"] = y_val.to_numpy()
+        metrics["_y_proba"] = proba
+        metrics["_classes"] = [int(c) for c in model.classes_]
+        validation_results.append(metrics)
+        tuned[name]["validation_metrics"] = _scalar_metrics(metrics)
+        logger.info(
+            "%s validation: log-loss=%.4f acc=%.4f brier=%.4f draw-recall=%.3f",
+            name, metrics["log_loss"], metrics["accuracy"],
+            metrics["brier_score"], metrics["draw_recall"],
+        )
+
+    validation_table = compare_models(validation_results)
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    validation_table.to_csv(EVAL_DIR / "validation_model_comparison.csv", index=False)
+
+    # Selection happens HERE, on validation data only.
+    ordered = sorted(
+        validation_results,
+        key=lambda m: (m[PRIMARY_METRIC], m[TIEBREAK_METRIC]),
+    )
+    best_validation = ordered[0]
+    best_name = best_validation["model"]
     logger.info(
-        "Serialized model classes: %s", list(best["estimator"].classes_)
+        "Selected %s on validation %s=%.4f (Brier=%.4f). "
+        "Test season has not been used for selection.",
+        best_name, PRIMARY_METRIC, best_validation[PRIMARY_METRIC],
+        best_validation[TIEBREAK_METRIC],
     )
+
+    # Final fit on train + validation, using preprocessing fitted on that same
+    # historical window. The test season remains untouched until scoring.
+    hist_idx = train_idx.append(val_idx)
+    final_pre = FeaturePreprocessor(FEATURE_COLUMNS)
+    X_hist = final_pre.fit_transform(X.loc[hist_idx])
+    y_hist = y.loc[hist_idx]
+    X_test = final_pre.transform(X_test_raw)
+
+    test_results: list[dict] = []
+    final_models: dict[str, object] = {}
+    for name, info in tuned.items():
+        model = build_estimator(name, info["params"])
+        if name == "XGBoost":
+            model.fit(X_hist, y_hist, sample_weight=balanced_sample_weights(y_hist))
+        else:
+            model.fit(X_hist, y_hist)
+        final_models[name] = model
+        proba = model.predict_proba(X_test)
+        metrics = evaluate_probabilities(y_test, proba, model.classes_, model_name=name)
+        metrics["_y_true"] = y_test.to_numpy()
+        metrics["_y_proba"] = proba
+        metrics["_classes"] = [int(c) for c in model.classes_]
+        test_results.append(metrics)
+        info["test_metrics"] = _scalar_metrics(metrics)
+        logger.info(
+            "%s TEST (scored once): log-loss=%.4f acc=%.4f brier=%.4f draw-recall=%.3f",
+            name, metrics["log_loss"], metrics["accuracy"],
+            metrics["brier_score"], metrics["draw_recall"],
+        )
+
+    test_table = compare_models(test_results)
+    test_table.insert(0, "selected_on_validation", test_table["model"] == best_name)
+
+    # Walk-forward backtest: excludes the final test season by default.
+    specs = [spec_from_params(name, info["params"]) for name, info in tuned.items()]
+    wf_results, wf_detail = run_walk_forward(
+        X, y, meta, specs,
+        min_train_seasons=1,
+        include_test_season=False,
+        test_season=TEST_SEASON,
+    )
+    wf_summary = summarise_walk_forward(wf_results)
+
+    # Season-by-season metrics: walk-forward folds plus the final test season.
+    season_cols = [
+        "model", "accuracy", "log_loss", "brier_score", "draw_recall",
+        "macro_f1", "ece", "n_samples",
+    ]
+    season_rows = []
+    if not wf_results.empty:
+        for _, row in wf_results.iterrows():
+            record = {c: row.get(c) for c in season_cols if c in row.index}
+            record["season"] = row["test_season"]
+            record["evaluation"] = "walk_forward"
+            season_rows.append(record)
+    for metrics in test_results:
+        row = metrics_to_row(metrics)
+        record = {c: row.get(c) for c in season_cols if c in row}
+        record["season"] = TEST_SEASON
+        record["evaluation"] = "final_test"
+        season_rows.append(record)
+    season_table = pd.DataFrame(season_rows)
+
+    trained_at = datetime.now(timezone.utc)
+    version_slug = best_name.lower().replace(" ", "_")
+    model_version = f"{version_slug}-{trained_at:%Y%m%dT%H%M%SZ}"
+
+    selected_model = final_models[best_name]
+    metadata = {
+        "model_name": best_name,
+        "model_version": model_version,
+        "trained_at": trained_at.isoformat(),
+        "random_state": RANDOM_STATE,
+        "feature_names": FEATURE_COLUMNS,
+        "classes": [int(c) for c in selected_model.classes_],
+        "parameters": tuned[best_name]["params"],
+        "tuning": tuned[best_name]["tuning"],
+        "selection": {
+            "metric": PRIMARY_METRIC,
+            "tiebreak": TIEBREAK_METRIC,
+            "validation_log_loss": best_validation["log_loss"],
+            "validation_brier": best_validation["brier_score"],
+            "validation_accuracy": best_validation["accuracy"],
+            "test_used_for_selection": False,
+        },
+        "split": {
+            "train_seasons": TRAIN_SEASONS,
+            "validation_season": VALIDATION_SEASON,
+            "test_season": TEST_SEASON,
+            "train_rows": int(len(train_idx)),
+            "validation_rows": int(len(val_idx)),
+            "test_rows": int(len(test_idx)),
+            "train_date_min": str(pd.to_datetime(meta.loc[train_idx, "date"]).min().date()),
+            "train_date_max": str(pd.to_datetime(meta.loc[train_idx, "date"]).max().date()),
+            "validation_date_max": str(pd.to_datetime(meta.loc[val_idx, "date"]).max().date()),
+            "test_date_min": str(pd.to_datetime(meta.loc[test_idx, "date"]).min().date()),
+            "test_date_max": str(pd.to_datetime(meta.loc[test_idx, "date"]).max().date()),
+        },
+        "validation_metrics": tuned[best_name]["validation_metrics"],
+        "test_metrics": tuned[best_name]["test_metrics"],
+        "all_models": {
+            name: {
+                "parameters": info["params"],
+                "validation_metrics": info["validation_metrics"],
+                "test_metrics": info["test_metrics"],
+            }
+            for name, info in tuned.items()
+        },
+        "walk_forward": {
+            "folds": int(wf_results["fold"].nunique()) if not wf_results.empty else 0,
+            "mean_log_loss": {
+                row["model"]: float(row["log_loss_mean"])
+                for _, row in wf_summary.iterrows()
+            } if not wf_summary.empty else {},
+        },
+    }
+
+    if save:
+        _save_artifacts(
+            selected_model, best_name, final_models, final_pre, metadata,
+            validation_results, test_results, test_table, season_table,
+            wf_results, wf_summary, X_hist,
+        )
+
+    return {
+        "metadata": metadata,
+        "validation_results": validation_results,
+        "test_results": test_results,
+        "comparison": test_table,
+        "season_metrics": season_table,
+        "walk_forward": wf_results,
+        "walk_forward_summary": wf_summary,
+        "tuned": tuned,
+        "models": final_models,
+        "preprocessor": final_pre,
+    }
+
+
+def _save_artifacts(
+    selected_model,
+    best_name: str,
+    final_models: dict,
+    preprocessor: FeaturePreprocessor,
+    metadata: dict,
+    validation_results: list[dict],
+    test_results: list[dict],
+    test_table: pd.DataFrame,
+    season_table: pd.DataFrame,
+    wf_results: pd.DataFrame,
+    wf_summary: pd.DataFrame,
+    X_hist: pd.DataFrame,
+) -> None:
+    SAVED_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
+
+    for name, model in final_models.items():
+        slug = name.lower().replace(" ", "_")
+        joblib.dump(model, SAVED_MODEL_DIR / f"model_{slug}.pkl")
+
+    # Training writes a versioned candidate. The live inference artifacts are
+    # only replaced by an explicit promotion (or the very first registered
+    # model), so a newer experiment can never silently become production.
+    version = metadata["model_version"]
+    candidate_model_path = SAVED_MODEL_DIR / f"candidate_{version}.pkl"
+    candidate_pre_path = SAVED_MODEL_DIR / f"candidate_preprocessor_{version}.joblib"
+    joblib.dump(selected_model, candidate_model_path)
+    preprocessor.save(candidate_pre_path)
+
+    metadata["selected_model_path"] = str(candidate_model_path.relative_to(PROJECT_ROOT))
+    metadata["preprocessor_path"] = str(candidate_pre_path.relative_to(PROJECT_ROOT))
+
+    from src.models import registry
+
+    entry, created = registry.register_model(
+        metadata,
+        model_path=candidate_model_path,
+        preprocessor_path=candidate_pre_path,
+    )
+    production = registry.current_production()
+    if production and production["version"] == version:
+        registry.restore_artifacts(version)
+        metadata["promotion_status"] = "production"
+        logger.warning(
+            "No previous production model existed; %s is now the initial "
+            "production model.", version,
+        )
+    else:
+        metadata["promotion_status"] = "candidate"
+        metadata["production_version"] = production["version"] if production else None
+        logger.info(
+            "Registered %s as a candidate (new=%s). Production %s is unchanged; "
+            "promote with `python -m src.models.registry promote %s --reason \"...\"`.",
+            version, created, metadata["production_version"], version,
+        )
+    logger.info("Saved candidate artifacts and evaluation outputs for %s", version)
+
+    test_table.to_csv(MODEL_COMPARISON_PATH, index=False)
+    season_table.to_csv(SEASON_METRICS_PATH, index=False)
+    if not wf_results.empty:
+        wf_results.to_csv(WALK_FORWARD_PATH, index=False)
+        wf_summary.to_csv(EVAL_DIR / "walk_forward_summary.csv", index=False)
+    save_feature_reference(X_hist)
+
+    # ---- Plots ---------------------------------------------------------
+    for metrics in test_results:
+        name = metrics["model"]
+        plot_confusion_matrix(
+            metrics["confusion_matrix"], f"{name} — Test", metrics["accuracy"]
+        )
+        plot_per_class_metrics(metrics["per_class"], f"{name} — Test")
+        if all(k in metrics for k in ("_y_true", "_y_proba", "_classes")):
+            plot_calibration_curves(
+                metrics["_y_true"], metrics["_y_proba"], metrics["_classes"],
+                f"{name} — Test",
+            )
+    plot_model_comparison(test_table)
+    if not wf_results.empty:
+        plot_walk_forward(wf_results)
+    if not season_table.empty:
+        plot_season_performance(season_table)
+
+    # Feature importance for tree models (human-readable model insight).
+    importance_rows = []
+    for name, model in final_models.items():
+        values = getattr(model, "feature_importances_", None)
+        if values is not None:
+            importance_rows.extend({
+                "model": name,
+                "feature": feature,
+                "importance": float(value),
+            } for feature, value in zip(FEATURE_COLUMNS, values))
+    if importance_rows:
+        pd.DataFrame(importance_rows).sort_values(
+            ["model", "importance"], ascending=[True, False]
+        ).to_csv(EVAL_DIR / "feature_importance.csv", index=False)
+
+    summary = {
+        "model_name": metadata["model_name"],
+        "model_version": metadata["model_version"],
+        "trained_at": metadata["trained_at"],
+        "selection": metadata["selection"],
+        "split": metadata["split"],
+        "validation_comparison": [
+            {k: _jsonable(v) for k, v in metrics_to_row(m).items()}
+            for m in validation_results
+        ],
+        "test_comparison": [
+            {k: _jsonable(v) for k, v in metrics_to_row(m).items()}
+            for m in test_results
+        ],
+        "walk_forward_summary": (
+            wf_summary.to_dict(orient="records") if not wf_summary.empty else []
+        ),
+        "feature_count": len(FEATURE_COLUMNS),
+        "known_limitations": [
+            "Test season is in progress; final metrics will change as more "
+            "matches are played.",
+            "Draw probabilities remain the hardest class and are typically "
+            "the least well calibrated.",
+            "Historical odds are Bet365 snapshots and may contain closing-line "
+            "bias unavailable at prediction time.",
+        ],
+    }
+    EVALUATION_REPORT_PATH.write_text(
+        json.dumps(summary, indent=2, default=_jsonable), encoding="utf-8"
+    )
+
+
+
+def main() -> int:
+    logger.info("Loading data and engineering features...")
+    raw = load_raw()
+    X, y, meta = build_model_frame(raw)
+    result = train_and_select(X, y, meta)
+    metadata = result["metadata"]
+
+    print("\n" + "=" * 72)
+    print("FINAL SUMMARY — validation-only selection, untouched test season")
+    print("=" * 72)
+    print(
+        f"Selected model : {metadata['model_name']} ({metadata['model_version']})"
+    )
+    print(f"Promotion      : {metadata.get('promotion_status', 'unknown')}")
+    print(
+        f"Selection      : validation log-loss="
+        f"{metadata['selection']['validation_log_loss']:.4f}, "
+        f"Brier={metadata['selection']['validation_brier']:.4f}"
+    )
+    print("\nValidation comparison:")
+    print(compare_models(result["validation_results"]).to_string(index=False))
+    print("\nTest comparison (scored once, never used for selection):")
+    print(result["comparison"].to_string(index=False))
+    if not result["walk_forward"].empty:
+        print("\nWalk-forward folds (earlier seasons only):")
+        print(
+            result["walk_forward"][
+                ["fold", "test_season", "model", "log_loss", "accuracy", "brier_score"]
+            ].to_string(index=False)
+        )
+    print(f"\nArtifacts: {SAVED_MODEL_DIR}, {EVAL_DIR}")
     return 0
 
 

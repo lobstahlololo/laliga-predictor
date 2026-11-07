@@ -1,0 +1,39 @@
+model,feature,importance
+Random Forest,implied_prob_home,0.2111716006096099
+Random Forest,implied_prob_away,0.20000454081398414
+Random Forest,implied_prob_draw,0.08456245358996956
+Random Forest,home_form_shots_on_target,0.0530179442884748
+Random Forest,home_form_total_shots,0.05285809344913442
+Random Forest,home_goal_diff_5m,0.05258020866136347
+Random Forest,away_form_total_shots,0.05134701710936122
+Random Forest,away_goal_diff_5m,0.04320626086803575
+Random Forest,home_form_goals_scored,0.04296018489082152
+Random Forest,away_form_shots_on_target,0.03943854060089647
+Random Forest,away_form_goals_scored,0.03189047514462649
+Random Forest,away_short_goals_scored,0.027077746202706664
+Random Forest,away_form_goals_conceded,0.026433602857042545
+Random Forest,home_form_goals_conceded,0.024946332477176893
+Random Forest,away_short_goals_conceded,0.020157384881065485
+Random Forest,home_short_goals_scored,0.0180810316790778
+Random Forest,home_short_goals_conceded,0.01678381765631813
+Random Forest,short_rest_advantage,0.003482764220334785
+Random Forest,home_advantage,0.0
+XGBoost,implied_prob_home,0.11366307566071934
+XGBoost,implied_prob_away,0.10761261571030892
+XGBoost,implied_prob_draw,0.06300723458815762
+XGBoost,home_goal_diff_5m,0.054375871205689444
+XGBoost,home_form_total_shots,0.05215246897708671
+XGBoost,home_form_goals_scored,0.0510360888982402
+XGBoost,away_form_total_shots,0.05042487680278902
+XGBoost,away_form_shots_on_target,0.04980853125738306
+XGBoost,home_short_goals_conceded,0.049220129114089475
+XGBoost,home_form_shots_on_target,0.04914560840806949
+XGBoost,away_short_goals_scored,0.04884000049769878
+XGBoost,away_short_goals_conceded,0.048225633081411826
+XGBoost,away_goal_diff_5m,0.04797336760202993
+XGBoost,away_form_goals_scored,0.04699855600299603
+XGBoost,home_form_goals_conceded,0.0460902669118305
+XGBoost,away_form_goals_conceded,0.04592433130853874
+XGBoost,home_short_goals_scored,0.04366792673367371
+XGBoost,short_rest_advantage,0.03183341723928724
+XGBoost,home_advantage,0.0

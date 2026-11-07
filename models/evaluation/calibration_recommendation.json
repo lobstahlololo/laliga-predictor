@@ -1,0 +1,12 @@
+{
+  "selected_by_model": {
+    "Random Forest": "sigmoid",
+    "XGBoost": "sigmoid"
+  },
+  "test_used_for_selection": false,
+  "deployment_note": "Calibration comparison is diagnostic. No calibrator is applied automatically by this experiment run. On test, the validation-selected calibrator collapses draw recall to about zero for Random Forest, XGBoost. Treat that as a decision-quality regression even where log-loss/Brier improve.",
+  "draw_recall_collapse": [
+    "Random Forest",
+    "XGBoost"
+  ]
+}

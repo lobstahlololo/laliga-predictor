@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-11-07T15:55:21+00:00",
+  "overall_status": "insufficient_data",
+  "model_version": "random_forest-20261105T224238Z",
+  "checks": [
+    {
+      "name": "missing_inputs",
+      "status": "ok",
+      "message": "Required inputs are present.",
+      "details": {
+        "missing_odds": 0,
+        "max_feature_missing_fraction": 0.01200960768614892,
+        "feature_missing": {
+          "away_form_goals_conceded": 0.01200960768614892,
+          "away_form_goals_scored": 0.01200960768614892,
+          "away_form_shots_on_target": 0.01200960768614892,
+          "away_form_total_shots": 0.01200960768614892,
+          "away_short_goals_conceded": 0.01200960768614892,
+          "away_short_goals_scored": 0.01200960768614892,
+          "home_form_goals_conceded": 0.01120896717373899,
+          "home_form_goals_scored": 0.01120896717373899,
+          "home_form_shots_on_target": 0.01120896717373899,
+          "home_form_total_shots": 0.01120896717373899,
+          "home_short_goals_conceded": 0.01120896717373899,
+          "home_short_goals_scored": 0.01120896717373899,
+          "home_goal_diff_5m": 0.01120896717373899,
+          "away_goal_diff_5m": 0.01200960768614892
+        },
+        "latest_match_age_days": 5
+      }
+    },
+    {
+      "name": "feature_drift",
+      "status": "ok",
+      "message": "Largest feature shift is +0.61 SD for home_form_total_shots over 60 recent matches.",
+      "details": {
+        "recent_n": 60,
+        "max_abs_shift_sd": 0.6092953942571455,
+        "feature": "home_form_total_shots",
+        "top_shifts": [
+          {
+            "feature": "home_form_total_shots",
+            "shift_sd": 0.6092953942571455
+          },
+          {
+            "feature": "implied_prob_draw",
+            "shift_sd": -0.5360336559255061
+          },
+          {
+            "feature": "home_form_shots_on_target",
+            "shift_sd": 0.49856828416512733
+          },
+          {
+            "feature": "away_form_goals_conceded",
+            "shift_sd": 0.4922002103627149
+          },
+          {
+            "feature": "away_form_total_shots",
+            "shift_sd": 0.4887349762634278
+          },
+          {
+            "feature": "home_form_goals_scored",
+            "shift_sd": 0.4724547723335765
+          },
+          {
+            "feature": "home_form_goals_conceded",
+            "shift_sd": 0.44903337382425784
+          },
+          {
+            "feature": "away_form_shots_on_target",
+            "shift_sd": 0.4348951248241315
+          }
+        ]
+      }
+    },
+    {
+      "name": "team_distribution",
+      "status": "ok",
+      "message": "Largest team-appearance share shift is 5.7% for La Coruna (recent 60 matches).",
+      "details": {
+        "recent_n": 60,
+        "baseline_n": 1189,
+        "max_shift": 0.05665124754695823,
+        "team": "La Coruna"
+      }
+    },
+    {
+      "name": "prediction_distribution",
+      "status": "insufficient_data",
+      "message": "Only 12 valid logged predictions; need at least 50 for a before/after comparison.",
+      "details": {
+        "n": 12
+      }
+    },
+    {
+      "name": "calibration_change",
+      "status": "insufficient_data",
+      "message": "Only 0 settled predictions with probabilities; need 30.",
+      "details": {
+        "n": 0
+      }
+    },
+    {
+      "name": "performance",
+      "status": "insufficient_data",
+      "message": "Only 0 settled predictions with probabilities; need 30 before judging degradation.",
+      "details": {
+        "n": 0
+      }
+    }
+  ],
+  "note": "Warnings indicate movement worth reviewing. Confirmed degradation requires a sufficient settled sample and a supportive interval; it still does not prove the model is broken."
+}

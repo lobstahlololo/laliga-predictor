@@ -1,0 +1,69 @@
+{
+  "experiment_id": "xgboost__base_19__20261106T174208Z__5f2289",
+  "timestamp": "2026-11-06T17:42:08.400612+00:00",
+  "model_type": "XGBoost",
+  "model_version": "random_forest-20261105T224238Z",
+  "feature_set": "base_19",
+  "variant": "calibration_sigmoid",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "feature_count": 19,
+  "feature_hash": "e8775e1c8b126941",
+  "hyperparameters": {
+    "subsample": 0.9,
+    "reg_lambda": 2.0,
+    "n_estimators": 200,
+    "min_child_weight": 3,
+    "max_depth": 6,
+    "max_delta_step": 1,
+    "learning_rate": 0.03,
+    "colsample_bytree": 0.8
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "calibration_method": "sigmoid",
+    "period": "validation_holdout",
+    "log_loss": 0.994228895260723,
+    "brier_score": 0.5940328629993665,
+    "ece": 0.06868747328404455,
+    "accuracy": 0.5,
+    "draw_recall": 0.1388888888888889
+  },
+  "test_metrics": {
+    "calibration_method": "sigmoid",
+    "log_loss": 0.9859988986418556,
+    "brier_score": 0.5889528928413723,
+    "ece": 0.06099003321596175,
+    "accuracy": 0.4954128440366973,
+    "draw_recall": 0.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "selected_calibration",
+  "notes": "Calibration method chosen on a chronological validation holdout; test scored once after selection."
+}

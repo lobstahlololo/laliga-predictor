@@ -1,0 +1,100 @@
+{
+  "config": {
+    "max_goals": 10,
+    "half_life_days": 365.0,
+    "prior_strength": 2.0,
+    "min_matches": 3,
+    "dixon_coles": true,
+    "rho_min": -0.15,
+    "rho_max": 0.15,
+    "rho_steps": 31,
+    "iterations": 80,
+    "minimum_weight": 0.01
+  },
+  "as_of": "2026-05-24",
+  "n_training_matches": 1140,
+  "home_base": 1.5318457852482392,
+  "away_base": 1.141123466199828,
+  "home_advantage_goals": 0.39072231904841126,
+  "rho": 0.010000000000000009,
+  "known_teams": 26,
+  "teams": 26,
+  "selected_config": {
+    "max_goals": 10,
+    "half_life_days": 365.0,
+    "prior_strength": 2.0,
+    "min_matches": 3,
+    "dixon_coles": true,
+    "rho_min": -0.15,
+    "rho_max": 0.15,
+    "rho_steps": 31,
+    "iterations": 80,
+    "minimum_weight": 0.01
+  },
+  "selection": [
+    {
+      "half_life_days": 365.0,
+      "prior_strength": 2.0,
+      "validation_log_loss": 0.9921713902683402,
+      "validation_brier_score": 0.5885939423783296,
+      "rho": 0.03
+    },
+    {
+      "half_life_days": 365.0,
+      "prior_strength": 5.0,
+      "validation_log_loss": 0.9923097837987657,
+      "validation_brier_score": 0.5888503618703678,
+      "rho": 0.03
+    },
+    {
+      "half_life_days": 365.0,
+      "prior_strength": 10.0,
+      "validation_log_loss": 0.9932359395474829,
+      "validation_brier_score": 0.5896952371663267,
+      "rho": 0.03
+    },
+    {
+      "half_life_days": 730.0,
+      "prior_strength": 5.0,
+      "validation_log_loss": 0.993390799320901,
+      "validation_brier_score": 0.5896246489199081,
+      "rho": 0.010000000000000009
+    },
+    {
+      "half_life_days": 730.0,
+      "prior_strength": 2.0,
+      "validation_log_loss": 0.9934170128357688,
+      "validation_brier_score": 0.5895048026463124,
+      "rho": 0.010000000000000009
+    },
+    {
+      "half_life_days": 730.0,
+      "prior_strength": 10.0,
+      "validation_log_loss": 0.9938501245962482,
+      "validation_brier_score": 0.5901264623067182,
+      "rho": 0.010000000000000009
+    },
+    {
+      "half_life_days": 1095.0,
+      "prior_strength": 5.0,
+      "validation_log_loss": 0.994068827428444,
+      "validation_brier_score": 0.5900927504823849,
+      "rho": 0.0
+    },
+    {
+      "half_life_days": 1095.0,
+      "prior_strength": 2.0,
+      "validation_log_loss": 0.994157265370145,
+      "validation_brier_score": 0.5900197583661938,
+      "rho": 0.0
+    },
+    {
+      "half_life_days": 1095.0,
+      "prior_strength": 10.0,
+      "validation_log_loss": 0.9943718205068984,
+      "validation_brier_score": 0.5904840378474185,
+      "rho": 0.0
+    }
+  ],
+  "selection_rule": "validation log-loss; test not used"
+}

@@ -1,0 +1,69 @@
+{
+  "experiment_id": "xgboost__base_19__20261106T174208Z__5d3929",
+  "timestamp": "2026-11-06T17:42:08.432243+00:00",
+  "model_type": "XGBoost",
+  "model_version": "random_forest-20261105T224238Z",
+  "feature_set": "base_19",
+  "variant": "calibration_none",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "feature_count": 19,
+  "feature_hash": "e8775e1c8b126941",
+  "hyperparameters": {
+    "subsample": 0.9,
+    "reg_lambda": 2.0,
+    "n_estimators": 200,
+    "min_child_weight": 3,
+    "max_depth": 6,
+    "max_delta_step": 1,
+    "learning_rate": 0.03,
+    "colsample_bytree": 0.8
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "calibration_method": "none",
+    "period": "validation_holdout",
+    "log_loss": 1.095408713080359,
+    "brier_score": 0.6489012999677488,
+    "ece": 0.13187428475828872,
+    "accuracy": 0.45394736842105265,
+    "draw_recall": 0.4444444444444444
+  },
+  "test_metrics": {
+    "calibration_method": "none",
+    "log_loss": 1.0223750426327771,
+    "brier_score": 0.5985061957887792,
+    "ece": 0.11554042272555831,
+    "accuracy": 0.5137614678899083,
+    "draw_recall": 0.2962962962962963
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "comparison_only",
+  "notes": "Calibration method chosen on a chronological validation holdout; test scored once after selection."
+}

@@ -1,0 +1,53 @@
+{
+  "experiment_id": "ensemble__equal__rf_xgb_elo_poisson__20261106T212025Z__efa563",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Ensemble (equal)",
+  "model_family": "ensemble",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "rf+xgb+elo+poisson",
+  "variant": "phase3",
+  "features": [],
+  "feature_count": 0,
+  "feature_hash": "e3b0c44298fc1c14",
+  "hyperparameters": {
+    "weights": {
+      "Random Forest": 0.25,
+      "XGBoost": 0.25,
+      "Dynamic Elo": 0.25,
+      "Independent Poisson": 0.25
+    }
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.5157894736842106,
+    "log_loss": 0.9820310518709852,
+    "brier_score": 0.5824435581499416,
+    "macro_f1": 0.45571947835735216,
+    "draw_recall": 0.20430107526881722,
+    "draw_precision": 0.34545454545454546,
+    "ece": 0.06096404956533408,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5045871559633027,
+    "log_loss": 0.9439773011157138,
+    "brier_score": 0.55666252474485,
+    "macro_f1": 0.399202105084458,
+    "draw_recall": 0.037037037037037035,
+    "draw_precision": 0.16666666666666666,
+    "ece": 0.0963886162504682,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "equal_weight_reference",
+  "notes": "Equal-weight RF/XGB/Elo/Poisson reference. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

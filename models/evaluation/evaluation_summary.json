@@ -1,0 +1,123 @@
+{
+  "model_name": "Random Forest",
+  "model_version": "random_forest-20261105T224238Z",
+  "trained_at": "2026-11-05T22:42:38.442282+00:00",
+  "selection": {
+    "metric": "log_loss",
+    "tiebreak": "brier_score",
+    "validation_log_loss": 1.0131205191795636,
+    "validation_brier": 0.602694283295263,
+    "validation_accuracy": 0.45789473684210524,
+    "test_used_for_selection": false
+  },
+  "split": {
+    "train_seasons": [
+      "23/24",
+      "24/25"
+    ],
+    "validation_season": "25/26",
+    "test_season": "26/27",
+    "train_rows": 760,
+    "validation_rows": 380,
+    "test_rows": 109,
+    "train_date_min": "2023-08-11",
+    "train_date_max": "2025-05-25",
+    "validation_date_max": "2026-05-24",
+    "test_date_min": "2026-08-15",
+    "test_date_max": "2026-11-02"
+  },
+  "validation_comparison": [
+    {
+      "model": "XGBoost",
+      "n_samples": 380,
+      "accuracy": 0.46578947368421053,
+      "log_loss": 1.0525969442603418,
+      "brier_score": 0.6268273826215901,
+      "macro_f1": 0.4477053140096618,
+      "draw_recall": 0.3763440860215054,
+      "draw_precision": 0.29914529914529914,
+      "ece": 0.10933168110416666,
+      "pred_share_home": 0.3526315789473684,
+      "pred_share_draw": 0.3078947368421053,
+      "pred_share_away": 0.3394736842105263
+    },
+    {
+      "model": "Random Forest",
+      "n_samples": 380,
+      "accuracy": 0.45789473684210524,
+      "log_loss": 1.0131205191795636,
+      "brier_score": 0.602694283295263,
+      "macro_f1": 0.449901321053883,
+      "draw_recall": 0.44086021505376344,
+      "draw_precision": 0.29285714285714287,
+      "ece": 0.09668468658995409,
+      "pred_share_home": 0.29473684210526313,
+      "pred_share_draw": 0.3684210526315789,
+      "pred_share_away": 0.3368421052631579
+    }
+  ],
+  "test_comparison": [
+    {
+      "model": "XGBoost",
+      "n_samples": 109,
+      "accuracy": 0.5137614678899083,
+      "log_loss": 1.0223750426327773,
+      "brier_score": 0.5985061957887792,
+      "macro_f1": 0.4861051322523557,
+      "draw_recall": 0.2962962962962963,
+      "draw_precision": 0.38095238095238093,
+      "ece": 0.11554042272555831,
+      "pred_share_home": 0.46788990825688076,
+      "pred_share_draw": 0.1926605504587156,
+      "pred_share_away": 0.3394495412844037
+    },
+    {
+      "model": "Random Forest",
+      "n_samples": 109,
+      "accuracy": 0.5045871559633027,
+      "log_loss": 0.9836637881033711,
+      "brier_score": 0.5811321169761982,
+      "macro_f1": 0.5047882486927516,
+      "draw_recall": 0.5555555555555556,
+      "draw_precision": 0.36585365853658536,
+      "ece": 0.08883118513627294,
+      "pred_share_home": 0.30275229357798167,
+      "pred_share_draw": 0.3761467889908257,
+      "pred_share_away": 0.3211009174311927
+    }
+  ],
+  "walk_forward_summary": [
+    {
+      "model": "Random Forest",
+      "accuracy_mean": 0.49473684210526314,
+      "accuracy_std": 0.052102604929535085,
+      "log_loss_mean": 1.0028795853442665,
+      "log_loss_std": 0.014482867521242306,
+      "brier_score_mean": 0.596073384832289,
+      "brier_score_std": 0.009363364401432941,
+      "draw_recall_mean": 0.3441414477330673,
+      "draw_recall_std": 0.13678099248093617,
+      "ece_mean": 0.08076254513441879,
+      "ece_std": 0.022517308388440918
+    },
+    {
+      "model": "XGBoost",
+      "accuracy_mean": 0.4644736842105263,
+      "accuracy_std": 0.001860807318911973,
+      "log_loss_mean": 1.0659463705085752,
+      "log_loss_std": 0.01887893965015118,
+      "brier_score_mean": 0.6353192984899662,
+      "brier_score_std": 0.012009382591588715,
+      "draw_recall_mean": 0.317038022392196,
+      "draw_recall_std": 0.0838714395155311,
+      "ece_mean": 0.11448054797386277,
+      "ece_std": 0.00728159735797774
+    }
+  ],
+  "feature_count": 19,
+  "known_limitations": [
+    "Test season is in progress; final metrics will change as more matches are played.",
+    "Draw probabilities remain the hardest class and are typically the least well calibrated.",
+    "Historical odds are Bet365 snapshots and may contain closing-line bias unavailable at prediction time."
+  ]
+}

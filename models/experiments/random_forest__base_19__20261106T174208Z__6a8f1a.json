@@ -1,0 +1,65 @@
+{
+  "experiment_id": "random_forest__base_19__20261106T174208Z__6a8f1a",
+  "timestamp": "2026-11-06T17:42:08.365616+00:00",
+  "model_type": "Random Forest",
+  "model_version": "random_forest-20261105T224238Z",
+  "feature_set": "base_19",
+  "variant": "calibration_isotonic",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "feature_count": 19,
+  "feature_hash": "e8775e1c8b126941",
+  "hyperparameters": {
+    "n_estimators": 200,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt",
+    "max_depth": 5
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "calibration_method": "isotonic",
+    "period": "validation_holdout",
+    "log_loss": 1.231218111971703,
+    "brier_score": 0.5972473272172826,
+    "ece": 0.06280766422030025,
+    "accuracy": 0.5197368421052632,
+    "draw_recall": 0.05555555555555555
+  },
+  "test_metrics": {
+    "calibration_method": "isotonic",
+    "log_loss": 0.9812413625906925,
+    "brier_score": 0.5793185197435072,
+    "ece": 0.06837943191070796,
+    "accuracy": 0.5412844036697247,
+    "draw_recall": 0.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "comparison_only",
+  "notes": "Calibration method chosen on a chronological validation holdout; test scored once after selection."
+}

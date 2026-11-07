@@ -1,0 +1,171 @@
+{
+  "model_name": "Random Forest",
+  "model_version": "random_forest-20261105T224238Z",
+  "trained_at": "2026-11-05T22:42:38.442282+00:00",
+  "random_state": 42,
+  "feature_names": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "classes": [
+    0,
+    1,
+    2
+  ],
+  "parameters": {
+    "n_estimators": 200,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt",
+    "max_depth": 5
+  },
+  "tuning": {
+    "params": {
+      "n_estimators": 200,
+      "min_samples_leaf": 2,
+      "max_features": "sqrt",
+      "max_depth": 5
+    },
+    "cv_log_loss": 0.994366649146247,
+    "cv_accuracy": 0.5245614035087719,
+    "cv_folds": 3,
+    "n_candidates": 24
+  },
+  "selection": {
+    "metric": "log_loss",
+    "tiebreak": "brier_score",
+    "validation_log_loss": 1.0131205191795636,
+    "validation_brier": 0.602694283295263,
+    "validation_accuracy": 0.45789473684210524,
+    "test_used_for_selection": false
+  },
+  "split": {
+    "train_seasons": [
+      "23/24",
+      "24/25"
+    ],
+    "validation_season": "25/26",
+    "test_season": "26/27",
+    "train_rows": 760,
+    "validation_rows": 380,
+    "test_rows": 109,
+    "train_date_min": "2023-08-11",
+    "train_date_max": "2025-05-25",
+    "validation_date_max": "2026-05-24",
+    "test_date_min": "2026-08-15",
+    "test_date_max": "2026-11-02"
+  },
+  "validation_metrics": {
+    "model": "Random Forest",
+    "n_samples": 380,
+    "accuracy": 0.45789473684210524,
+    "log_loss": 1.0131205191795636,
+    "brier_score": 0.602694283295263,
+    "macro_f1": 0.449901321053883,
+    "draw_recall": 0.44086021505376344,
+    "draw_precision": 0.29285714285714287,
+    "ece": 0.09668468658995409
+  },
+  "test_metrics": {
+    "model": "Random Forest",
+    "n_samples": 109,
+    "accuracy": 0.5045871559633027,
+    "log_loss": 0.9836637881033711,
+    "brier_score": 0.5811321169761982,
+    "macro_f1": 0.5047882486927516,
+    "draw_recall": 0.5555555555555556,
+    "draw_precision": 0.36585365853658536,
+    "ece": 0.08883118513627294
+  },
+  "all_models": {
+    "XGBoost": {
+      "parameters": {
+        "subsample": 0.9,
+        "reg_lambda": 2.0,
+        "n_estimators": 200,
+        "min_child_weight": 3,
+        "max_depth": 6,
+        "max_delta_step": 1,
+        "learning_rate": 0.03,
+        "colsample_bytree": 0.8
+      },
+      "validation_metrics": {
+        "model": "XGBoost",
+        "n_samples": 380,
+        "accuracy": 0.46578947368421053,
+        "log_loss": 1.0525969442603418,
+        "brier_score": 0.6268273826215901,
+        "macro_f1": 0.4477053140096618,
+        "draw_recall": 0.3763440860215054,
+        "draw_precision": 0.29914529914529914,
+        "ece": 0.10933168110416666
+      },
+      "test_metrics": {
+        "model": "XGBoost",
+        "n_samples": 109,
+        "accuracy": 0.5137614678899083,
+        "log_loss": 1.0223750426327773,
+        "brier_score": 0.5985061957887792,
+        "macro_f1": 0.4861051322523557,
+        "draw_recall": 0.2962962962962963,
+        "draw_precision": 0.38095238095238093,
+        "ece": 0.11554042272555831
+      }
+    },
+    "Random Forest": {
+      "parameters": {
+        "n_estimators": 200,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "max_depth": 5
+      },
+      "validation_metrics": {
+        "model": "Random Forest",
+        "n_samples": 380,
+        "accuracy": 0.45789473684210524,
+        "log_loss": 1.0131205191795636,
+        "brier_score": 0.602694283295263,
+        "macro_f1": 0.449901321053883,
+        "draw_recall": 0.44086021505376344,
+        "draw_precision": 0.29285714285714287,
+        "ece": 0.09668468658995409
+      },
+      "test_metrics": {
+        "model": "Random Forest",
+        "n_samples": 109,
+        "accuracy": 0.5045871559633027,
+        "log_loss": 0.9836637881033711,
+        "brier_score": 0.5811321169761982,
+        "macro_f1": 0.5047882486927516,
+        "draw_recall": 0.5555555555555556,
+        "draw_precision": 0.36585365853658536,
+        "ece": 0.08883118513627294
+      }
+    }
+  },
+  "walk_forward": {
+    "folds": 2,
+    "mean_log_loss": {
+      "Random Forest": 1.0028795853442665,
+      "XGBoost": 1.0659463705085752
+    }
+  },
+  "selected_model_path": "models\\saved_models\\best_model.pkl",
+  "preprocessor_path": "data/processed/preprocessor.joblib"
+}

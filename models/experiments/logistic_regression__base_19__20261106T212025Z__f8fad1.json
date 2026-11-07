@@ -1,0 +1,69 @@
+{
+  "experiment_id": "logistic_regression__base_19__20261106T212025Z__f8fad1",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Logistic regression",
+  "model_family": "linear",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "base_19",
+  "variant": "phase3",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "feature_count": 19,
+  "feature_hash": "e8775e1c8b126941",
+  "hyperparameters": {
+    "max_iter": 3000,
+    "class_weight": "balanced"
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.4868421052631579,
+    "log_loss": 1.029468585424342,
+    "brier_score": 0.6065363764615037,
+    "macro_f1": 0.4755843160005246,
+    "draw_recall": 0.4731182795698925,
+    "draw_precision": 0.3076923076923077,
+    "ece": 0.10443557990013307,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5045871559633027,
+    "log_loss": 0.9608351983169426,
+    "brier_score": 0.567945210650354,
+    "macro_f1": 0.5022747367574955,
+    "draw_recall": 0.5185185185185185,
+    "draw_precision": 0.358974358974359,
+    "ece": 0.1144179455889286,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "experimental_not_deployed",
+  "notes": "Multinomial logistic regression on the same features. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

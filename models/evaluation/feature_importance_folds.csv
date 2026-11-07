@@ -1,0 +1,153 @@
+fold,test_season,model,feature,method,importance
+1,24/25,Random Forest,implied_prob_away,tree,0.17623577691990666
+1,24/25,Random Forest,implied_prob_home,tree,0.16202332755047205
+1,24/25,Random Forest,home_goal_diff_5m,tree,0.06426166976042472
+1,24/25,Random Forest,away_form_total_shots,tree,0.05628528646366835
+1,24/25,Random Forest,home_form_goals_scored,tree,0.05295405158080956
+1,24/25,Random Forest,implied_prob_draw,tree,0.05267355389165446
+1,24/25,Random Forest,away_form_shots_on_target,tree,0.049597725490069376
+1,24/25,Random Forest,away_form_goals_scored,tree,0.04928546644069004
+1,24/25,Random Forest,away_goal_diff_5m,tree,0.04534037335572187
+1,24/25,Random Forest,home_form_shots_on_target,tree,0.045296213490670666
+1,24/25,Random Forest,home_form_total_shots,tree,0.04364038878212487
+1,24/25,Random Forest,home_form_goals_conceded,tree,0.04046967571931532
+1,24/25,Random Forest,away_form_goals_conceded,tree,0.03747885300661505
+1,24/25,Random Forest,away_short_goals_scored,tree,0.034532002655279934
+1,24/25,Random Forest,home_short_goals_conceded,tree,0.033024357217039245
+1,24/25,Random Forest,home_short_goals_scored,tree,0.028450422027514514
+1,24/25,Random Forest,away_short_goals_conceded,tree,0.025582906183710376
+1,24/25,Random Forest,short_rest_advantage,tree,0.0028679494643129634
+1,24/25,Random Forest,home_advantage,tree,0.0
+1,24/25,Random Forest,implied_prob_away,permutation,0.0433094703008178
+1,24/25,Random Forest,implied_prob_home,permutation,0.031018893554442383
+1,24/25,Random Forest,implied_prob_draw,permutation,0.0052265630324811905
+1,24/25,Random Forest,away_form_goals_conceded,permutation,0.0004214681050677571
+1,24/25,Random Forest,home_form_total_shots,permutation,0.0004079439920821715
+1,24/25,Random Forest,away_short_goals_conceded,permutation,0.0003249087122771721
+1,24/25,Random Forest,short_rest_advantage,permutation,0.00030438203690099643
+1,24/25,Random Forest,away_form_total_shots,permutation,0.0001306827704246727
+1,24/25,Random Forest,home_advantage,permutation,0.0
+1,24/25,Random Forest,away_goal_diff_5m,permutation,-0.0016264788220945459
+1,24/25,Random Forest,home_form_goals_conceded,permutation,-0.0020378100536766917
+1,24/25,Random Forest,home_form_shots_on_target,permutation,-0.0022069793366229053
+1,24/25,Random Forest,home_form_goals_scored,permutation,-0.002291168765024776
+1,24/25,Random Forest,away_form_goals_scored,permutation,-0.0025739913503369793
+1,24/25,Random Forest,home_short_goals_scored,permutation,-0.0026975952427405582
+1,24/25,Random Forest,home_goal_diff_5m,permutation,-0.0027108660678718975
+1,24/25,Random Forest,away_short_goals_scored,permutation,-0.0027803274480669325
+1,24/25,Random Forest,away_form_shots_on_target,permutation,-0.0045199457700214165
+1,24/25,Random Forest,home_short_goals_conceded,permutation,-0.0049444288050744635
+1,24/25,XGBoost,implied_prob_away,tree,0.13816858210406086
+1,24/25,XGBoost,implied_prob_home,tree,0.08900985468879992
+1,24/25,XGBoost,home_goal_diff_5m,tree,0.06102854485682198
+1,24/25,XGBoost,away_short_goals_scored,tree,0.05524257696080609
+1,24/25,XGBoost,home_form_goals_scored,tree,0.05518766245897133
+1,24/25,XGBoost,implied_prob_draw,tree,0.05468007677733555
+1,24/25,XGBoost,home_form_goals_conceded,tree,0.05422996114656503
+1,24/25,XGBoost,away_form_shots_on_target,tree,0.05406256895977696
+1,24/25,XGBoost,home_short_goals_scored,tree,0.05263740706574587
+1,24/25,XGBoost,away_form_total_shots,tree,0.05095578874845257
+1,24/25,XGBoost,away_form_goals_scored,tree,0.05057099608014542
+1,24/25,XGBoost,home_form_total_shots,tree,0.04988481998958498
+1,24/25,XGBoost,home_form_shots_on_target,tree,0.0493158862300566
+1,24/25,XGBoost,away_goal_diff_5m,tree,0.04798650899589767
+1,24/25,XGBoost,home_short_goals_conceded,tree,0.04680723860231465
+1,24/25,XGBoost,away_form_goals_conceded,tree,0.04587152395226699
+1,24/25,XGBoost,away_short_goals_conceded,tree,0.04436000238239755
+1,24/25,XGBoost,short_rest_advantage,tree,0.0
+1,24/25,XGBoost,home_advantage,tree,0.0
+1,24/25,XGBoost,implied_prob_away,permutation,0.0597121000289917
+1,24/25,XGBoost,implied_prob_draw,permutation,0.0159285306930542
+1,24/25,XGBoost,implied_prob_home,permutation,0.006575155258178711
+1,24/25,XGBoost,home_form_total_shots,permutation,0.006502556800842285
+1,24/25,XGBoost,away_short_goals_conceded,permutation,0.005058646202087402
+1,24/25,XGBoost,away_form_total_shots,permutation,0.003100419044494629
+1,24/25,XGBoost,away_form_goals_conceded,permutation,0.00036571025848388674
+1,24/25,XGBoost,home_advantage,permutation,0.0
+1,24/25,XGBoost,short_rest_advantage,permutation,0.0
+1,24/25,XGBoost,away_short_goals_scored,permutation,-0.00014204978942871093
+1,24/25,XGBoost,home_goal_diff_5m,permutation,-0.005109310150146484
+1,24/25,XGBoost,away_form_goals_scored,permutation,-0.006313014030456543
+1,24/25,XGBoost,home_short_goals_scored,permutation,-0.007924413681030274
+1,24/25,XGBoost,home_form_shots_on_target,permutation,-0.009645843505859375
+1,24/25,XGBoost,home_form_goals_conceded,permutation,-0.010247945785522461
+1,24/25,XGBoost,away_goal_diff_5m,permutation,-0.010641789436340332
+1,24/25,XGBoost,away_form_shots_on_target,permutation,-0.011462593078613281
+1,24/25,XGBoost,home_short_goals_conceded,permutation,-0.013537335395812988
+1,24/25,XGBoost,home_form_goals_scored,permutation,-0.01520986557006836
+2,25/26,Random Forest,implied_prob_away,tree,0.20349604689281595
+2,25/26,Random Forest,implied_prob_home,tree,0.19126716462547552
+2,25/26,Random Forest,implied_prob_draw,tree,0.07651146273701627
+2,25/26,Random Forest,away_form_total_shots,tree,0.050492085744374506
+2,25/26,Random Forest,home_form_total_shots,tree,0.048572855920851685
+2,25/26,Random Forest,away_goal_diff_5m,tree,0.047834863681445544
+2,25/26,Random Forest,home_goal_diff_5m,tree,0.04683799521157279
+2,25/26,Random Forest,home_form_goals_scored,tree,0.044435202657943866
+2,25/26,Random Forest,away_form_goals_scored,tree,0.042644590896131894
+2,25/26,Random Forest,away_form_shots_on_target,tree,0.041418255105864
+2,25/26,Random Forest,home_form_shots_on_target,tree,0.040739347259248194
+2,25/26,Random Forest,away_form_goals_conceded,tree,0.033420255831376984
+2,25/26,Random Forest,away_short_goals_scored,tree,0.03069511828674348
+2,25/26,Random Forest,home_form_goals_conceded,tree,0.028406214903764937
+2,25/26,Random Forest,away_short_goals_conceded,tree,0.02691878674967165
+2,25/26,Random Forest,home_short_goals_conceded,tree,0.02228105469121175
+2,25/26,Random Forest,home_short_goals_scored,tree,0.020126180708885104
+2,25/26,Random Forest,short_rest_advantage,tree,0.003902518095605957
+2,25/26,Random Forest,home_advantage,tree,0.0
+2,25/26,Random Forest,implied_prob_home,permutation,0.02646640192437899
+2,25/26,Random Forest,implied_prob_away,permutation,0.02478764077684148
+2,25/26,Random Forest,implied_prob_draw,permutation,0.009541891169058214
+2,25/26,Random Forest,home_form_total_shots,permutation,0.0021203723187417367
+2,25/26,Random Forest,home_form_shots_on_target,permutation,0.0015826956084779465
+2,25/26,Random Forest,home_goal_diff_5m,permutation,0.0009267024810418967
+2,25/26,Random Forest,away_form_total_shots,permutation,0.0008952427130873187
+2,25/26,Random Forest,home_form_goals_scored,permutation,0.0006184394173188057
+2,25/26,Random Forest,away_form_shots_on_target,permutation,0.0003445691723996891
+2,25/26,Random Forest,home_advantage,permutation,0.0
+2,25/26,Random Forest,short_rest_advantage,permutation,-0.0001890373203481843
+2,25/26,Random Forest,home_short_goals_conceded,permutation,-0.0002744016068277677
+2,25/26,Random Forest,away_short_goals_scored,permutation,-0.0002971792229790271
+2,25/26,Random Forest,away_short_goals_conceded,permutation,-0.0007260492096871296
+2,25/26,Random Forest,home_short_goals_scored,permutation,-0.0014264945245588301
+2,25/26,Random Forest,home_form_goals_conceded,permutation,-0.0021210726911427445
+2,25/26,Random Forest,away_goal_diff_5m,permutation,-0.002258211199010196
+2,25/26,Random Forest,away_form_goals_conceded,permutation,-0.00244629130330738
+2,25/26,Random Forest,away_form_goals_scored,permutation,-0.003944943342428298
+2,25/26,XGBoost,implied_prob_away,tree,0.13590721887280954
+2,25/26,XGBoost,implied_prob_home,tree,0.08729077195592799
+2,25/26,XGBoost,implied_prob_draw,tree,0.06088830576008786
+2,25/26,XGBoost,home_goal_diff_5m,tree,0.05495367985184252
+2,25/26,XGBoost,away_form_total_shots,tree,0.0516324941190518
+2,25/26,XGBoost,away_short_goals_scored,tree,0.05146791079243951
+2,25/26,XGBoost,home_form_total_shots,tree,0.04988965801812453
+2,25/26,XGBoost,away_form_goals_conceded,tree,0.04832889548189115
+2,25/26,XGBoost,home_form_shots_on_target,tree,0.04775378516132969
+2,25/26,XGBoost,away_short_goals_conceded,tree,0.0476356226774724
+2,25/26,XGBoost,away_form_goals_scored,tree,0.047294114137397064
+2,25/26,XGBoost,home_form_goals_scored,tree,0.046972297481986114
+2,25/26,XGBoost,away_goal_diff_5m,tree,0.046945646754992354
+2,25/26,XGBoost,home_short_goals_scored,tree,0.04669101943590506
+2,25/26,XGBoost,home_form_goals_conceded,tree,0.0460094105154977
+2,25/26,XGBoost,away_form_shots_on_target,tree,0.045221831986470756
+2,25/26,XGBoost,home_short_goals_conceded,tree,0.04341682451528925
+2,25/26,XGBoost,short_rest_advantage,tree,0.04170051248148465
+2,25/26,XGBoost,home_advantage,tree,0.0
+2,25/26,XGBoost,implied_prob_away,permutation,0.05373573303222656
+2,25/26,XGBoost,implied_prob_draw,permutation,0.031116485595703125
+2,25/26,XGBoost,home_form_total_shots,permutation,0.012839484214782714
+2,25/26,XGBoost,away_form_shots_on_target,permutation,0.009281277656555176
+2,25/26,XGBoost,implied_prob_home,permutation,0.007307529449462891
+2,25/26,XGBoost,home_form_shots_on_target,permutation,0.006199288368225098
+2,25/26,XGBoost,home_goal_diff_5m,permutation,0.005430412292480469
+2,25/26,XGBoost,home_form_goals_scored,permutation,0.0029139041900634764
+2,25/26,XGBoost,home_short_goals_conceded,permutation,0.0026601552963256836
+2,25/26,XGBoost,away_short_goals_conceded,permutation,0.0009457826614379883
+2,25/26,XGBoost,home_advantage,permutation,0.0
+2,25/26,XGBoost,short_rest_advantage,permutation,-0.0013125419616699218
+2,25/26,XGBoost,home_short_goals_scored,permutation,-0.003214406967163086
+2,25/26,XGBoost,away_short_goals_scored,permutation,-0.003219270706176758
+2,25/26,XGBoost,away_form_goals_conceded,permutation,-0.003276634216308594
+2,25/26,XGBoost,away_goal_diff_5m,permutation,-0.0037532806396484374
+2,25/26,XGBoost,home_form_goals_conceded,permutation,-0.00479123592376709
+2,25/26,XGBoost,away_form_total_shots,permutation,-0.0060786247253417965
+2,25/26,XGBoost,away_form_goals_scored,permutation,-0.006469249725341797

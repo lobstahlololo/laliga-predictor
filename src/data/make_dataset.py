@@ -1,49 +1,54 @@
-"""Fetch and merge real La Liga match history from Football-Data.co.uk.
+"""Fetch, merge and validate La Liga match history from Football-Data.co.uk.
 
-Downloads the raw match sheets for the requested seasons, maps the columns to
-recognizable names, converts the full-time result into a numerical target and
-saves one master chronological dataset to ``data/raw/laliga_matches.csv``.
+The pipeline is incremental and idempotent:
+
+* Each configured season is downloaded independently.
+* If a download fails, the cached rows for that season are retained (the
+  pipeline never silently replaces real data with an empty frame).
+* New rows are merged with the cached master file, cleaned, de-duplicated by
+  stable fixture ID and sorted chronologically.
+* A machine-readable quality report is written to
+  ``data/processed/data_quality.json``.
+
+Running the script repeatedly therefore refreshes played matches without
+duplicating rows or corrupting existing history.
 
 Usage:
-    python src/data/make_dataset.py
+    python -m src.data.make_dataset
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
+from io import StringIO
 from pathlib import Path
 
 import pandas as pd
 import requests
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-# Project root (two levels up from src/data/make_dataset.py)
+# Allow direct execution: python src/data/make_dataset.py
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
-OUTPUT_PATH = RAW_DATA_DIR / "laliga_matches.csv"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-# Football-Data.co.uk uses the code SP1 for La Liga (Spain 1st division).
+from src.data.validation import clean_matches  # noqa: E402
+from src.utils.config import (  # noqa: E402
+    DATA_QUALITY_PATH,
+    RAW_DIR,
+    RAW_PATH,
+    SEASONS,
+    SEASON_CODES,
+)
+
 BASE_URL = "https://www.football-data.co.uk/mmz4281/{season}/SP1.csv"
-
-# Seasons to download, most recent first (26/27, 25/26, 24/25, 23/24).
-SEASONS = ["2627", "2526", "2425", "2324"]
-
-REQUEST_TIMEOUT = 30  # seconds
+REQUEST_TIMEOUT = 30
 USER_AGENT = "Mozilla/5.0 (LaLiga-Outcome-Predictor; data pipeline)"
-
-# Some networks block direct access to football-data.co.uk. In that case we
-# fall back to fetching through the r.jina.ai text-extraction proxy, which
-# retrieves the same upstream CSV from their servers and prepends a small
-# metadata block before the raw CSV body.
 PROXY_URL = "https://r.jina.ai/{url}"
-CSV_HEADER_TOKEN = "Div,"  # first token of a Football-Data CSV header line
+CSV_HEADER_TOKEN = "Div,"
 USE_PROXY_FALLBACK = True
 
-# Columns we keep, mapped to recognizable names.
 COLUMN_MAP = {
     "Date": "date",
     "HomeTeam": "home_team",
@@ -55,24 +60,11 @@ COLUMN_MAP = {
     "AS": "away_shots",
     "HST": "home_shots_on_target",
     "AST": "away_shots_on_target",
-    # Bet365 decimal odds -> implied market probabilities below.
     "B365H": "odds_home",
     "B365D": "odds_draw",
     "B365A": "odds_away",
 }
-
-REQUIRED_COLUMNS = list(COLUMN_MAP.keys())
-
-# Implied market probability = 1 / decimal odds. These wrap up team news,
-# market sentiment and historical strength into one very strong baseline.
-ODDS_TO_PROB = {
-    "odds_home": "implied_prob_home",
-    "odds_draw": "implied_prob_draw",
-    "odds_away": "implied_prob_away",
-}
-
-# Map FTR codes onto the numerical target: 2 = Home Win, 1 = Draw, 0 = Away Win.
-FTR_TO_OUTCOME = {"H": 2, "D": 1, "A": 0}
+REQUIRED_COLUMNS = list(COLUMN_MAP)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,16 +75,14 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Data acquisition
+# Download helpers
 # ---------------------------------------------------------------------------
 
 def _download(url: str) -> str:
-    """Download a URL to text, trying direct access then the proxy fallback."""
+    """Download a URL as text, falling back to the text-extraction proxy."""
     try:
         response = requests.get(
-            url,
-            timeout=REQUEST_TIMEOUT,
-            headers={"User-Agent": USER_AGENT},
+            url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT}
         )
         response.raise_for_status()
         return response.text
@@ -105,9 +95,7 @@ def _download(url: str) -> str:
     logger.info("Falling back to proxy fetch for %s", url)
     try:
         response = requests.get(
-            proxy,
-            timeout=REQUEST_TIMEOUT * 2,
-            headers={"User-Agent": USER_AGENT},
+            proxy, timeout=REQUEST_TIMEOUT * 2, headers={"User-Agent": USER_AGENT}
         )
         response.raise_for_status()
     except requests.RequestException as exc:
@@ -116,37 +104,29 @@ def _download(url: str) -> str:
 
 
 def _strip_proxy_metadata(text: str, url: str) -> str:
-    """Drop the proxy's leading metadata block, keeping only the CSV body."""
-    lines = text.splitlines()
-    for i, line in enumerate(lines):
+    """Drop the proxy's leading metadata block, keeping the CSV body."""
+    for i, line in enumerate(text.splitlines()):
         if line.startswith(CSV_HEADER_TOKEN):
-            return "\n".join(lines[i:])
+            return "\n".join(text.splitlines()[i:])
     raise RuntimeError(
-        f"Proxy response for {url} did not contain a CSV header line "
-        f"starting with {CSV_HEADER_TOKEN!r}; upstream format may have changed."
+        f"Proxy response for {url} had no CSV header starting with "
+        f"{CSV_HEADER_TOKEN!r}; upstream format may have changed."
     )
 
 
 def fetch_season(season: str) -> pd.DataFrame:
-    """Download one season's CSV from Football-Data.co.uk into a DataFrame."""
+    """Download and clean one season's CSV.
+
+    ``season`` is a Football-Data code such as ``"2425"``. In-progress
+    seasons may not exist upstream yet; callers handle the failure.
+    """
     url = BASE_URL.format(season=season)
-    logger.info("Fetching season %s/%s from %s", season[:2], season[2:], url)
-
+    logger.info("Fetching season %s from %s", SEASON_CODES.get(season, season), url)
     csv_text = _download(url)
+    df = pd.read_csv(StringIO(csv_text), encoding="latin-1", skip_blank_lines=True)
 
-    # Football-Data serves Latin-1 encoded sheets with occasional blank lines.
-    from io import StringIO
-
-    df = pd.read_csv(
-        StringIO(csv_text),
-        encoding="latin-1",
-        skip_blank_lines=True,
-    )
-
-    # Drop the trailingTotals/aggregate rows some sheets contain.
-    if "Time" in df.columns:
-        df = df[df["Time"].notna() | df["HomeTeam"].notna()]
-    df = df[df["HomeTeam"].notna()].copy()
+    if "HomeTeam" in df.columns:
+        df = df[df["HomeTeam"].notna()].copy()
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -155,99 +135,120 @@ def fetch_season(season: str) -> pd.DataFrame:
             "The upstream schema may have changed."
         )
 
-    df = df[REQUIRED_COLUMNS].copy()
-    df["season"] = f"{season[:2]}/{season[2:]}"
-    logger.info("Season %s/%s: %d matches", season[:2], season[2:], len(df))
-    return df
+    df = df[REQUIRED_COLUMNS].rename(columns=COLUMN_MAP)
+    cleaned, _ = clean_matches(df)
+    logger.info("Season %s: %d matches", SEASON_CODES.get(season, season), len(cleaned))
+    return cleaned
 
 
-def build_master_dataset() -> pd.DataFrame:
-    """Fetch all configured seasons and merge into one chronological frame."""
-    frames = []
-    for season in SEASONS:
+# ---------------------------------------------------------------------------
+# Master dataset
+# ---------------------------------------------------------------------------
+
+def load_cached(path: Path = RAW_PATH) -> pd.DataFrame:
+    """Load the cached master dataset, or an empty frame if absent."""
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        cached = pd.read_csv(path, parse_dates=["date"])
+    except Exception as exc:  # noqa: BLE001 - a corrupt cache must not be fatal
+        logger.warning("Could not read cached dataset %s: %s", path, exc)
+        return pd.DataFrame()
+    logger.info("Loaded %d cached matches from %s", len(cached), path)
+    return cached
+
+
+def build_master_dataset(
+    seasons: list[str] | None = None,
+    cached: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    """Fetch configured seasons and merge them with the cached master.
+
+    Returns the cleaned chronological frame and a quality report. A season
+    that fails to download keeps its cached rows.
+    """
+    seasons = seasons or SEASONS
+    cached = load_cached() if cached is None else cached
+
+    frames: list[pd.DataFrame] = []
+    fetched_seasons: list[str] = []
+    failed_seasons: list[str] = []
+
+    for season in seasons:
         try:
             frames.append(fetch_season(season))
-        except RuntimeError as exc:
-            # A future/in-progress season may 404; degrade gracefully.
-            logger.warning("Skipping season %s: %s", season, exc)
+            fetched_seasons.append(season)
+        except (RuntimeError, ValueError, KeyError) as exc:
+            failed_seasons.append(season)
+            logger.warning("Skipping season %s: %s", SEASON_CODES.get(season, season), exc)
 
+    if not frames and cached.empty:
+        raise RuntimeError(
+            "No season data could be fetched and no cached dataset exists. "
+            "Check network access or provide data/raw/laliga_matches.csv."
+        )
     if not frames:
-        raise RuntimeError("No season data could be fetched. Aborting.")
-
-    master = pd.concat(frames, ignore_index=True)
-
-    # Rename to recognizable names.
-    master = master.rename(columns=COLUMN_MAP)
-
-    # Parse dates (Football-Data uses dd/mm/yy or dd/mm/yyyy).
-    master["date"] = pd.to_datetime(
-        master["date"], dayfirst=True, errors="coerce"
-    )
-
-    # Numerical target: 2 = Home Win, 1 = Draw, 0 = Away Win.
-    unknown = set(master["full_time_result"].dropna().unique()) - set(
-        FTR_TO_OUTCOME
-    )
-    if unknown:
-        logger.warning("Dropping rows with unknown FTR codes: %s", unknown)
-    master = master[master["full_time_result"].isin(FTR_TO_OUTCOME)].copy()
-    master["match_outcome"] = (
-        master["full_time_result"].map(FTR_TO_OUTCOME).astype(int)
-    )
-
-    # Enforce numeric dtypes on statistics columns.
-    numeric_cols = [
-        "full_time_home_goals",
-        "full_time_away_goals",
-        "home_shots",
-        "away_shots",
-        "home_shots_on_target",
-        "away_shots_on_target",
-    ]
-    for col in numeric_cols + list(ODDS_TO_PROB):
-        master[col] = pd.to_numeric(master[col], errors="coerce")
-
-    # Implied market probabilities from Bet365 decimal odds.
-    for odds_col, prob_col in ODDS_TO_PROB.items():
-        master[prob_col] = (1.0 / master[odds_col].where(master[odds_col] > 0)).astype(float)
-    n_missing_prob = int(master["implied_prob_home"].isna().sum())
-    if n_missing_prob:
         logger.warning(
-            "%d matches have missing/invalid Bet365 odds; implied probabilities "
-            "left as NaN.", n_missing_prob,
+            "All downloads failed; continuing with the cached dataset "
+            "(%d matches). No data was invented.",
+            len(cached),
         )
 
-    # Sort chronologically (then by season order) for the master frame.
-    master = (
-        master.dropna(subset=["date"])
-        .sort_values(["date", "home_team", "away_team"])
-        .reset_index(drop=True)
-    )
+    fresh = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    combined = pd.concat([cached, fresh], ignore_index=True) if not cached.empty else fresh
 
-    # Stable match key for downstream joins.
-    master.insert(
-        0,
-        "match_id",
-        [f"{d:%Y%m%d}_{h}_v_{a}" for d, h, a in zip(
-            master["date"], master["home_team"], master["away_team"]
-        )],
-    )
+    # Cached rows for seasons that failed upstream survive the concat; fresh
+    # rows win on duplicate fixture IDs because dedupe keeps the last copy.
+    if not cached.empty:
+        combined = pd.concat([cached, fresh], ignore_index=True)
+        if not fresh.empty:
+            fresh_ids = set(fresh["match_id"]) if "match_id" in fresh.columns else set()
+            if fresh_ids:
+                combined = pd.concat(
+                    [cached[~cached["match_id"].isin(fresh_ids)], fresh],
+                    ignore_index=True,
+                )
 
-    return master
+    cleaned, report = clean_matches(combined)
+    report.update(
+        {
+            "seasons_fetched": [SEASON_CODES.get(s, s) for s in fetched_seasons],
+            "seasons_failed": [SEASON_CODES.get(s, s) for s in failed_seasons],
+            "seasons_present": sorted(cleaned["season"].dropna().unique().tolist()),
+            "date_min": str(cleaned["date"].min().date()) if not cleaned.empty else None,
+            "date_max": str(cleaned["date"].max().date()) if not cleaned.empty else None,
+        }
+    )
+    return cleaned, report
+
+
+def write_atomic(df: pd.DataFrame, path: Path) -> None:
+    """Write a CSV through a temporary file, then replace the target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    df.to_csv(tmp, index=False)
+    tmp.replace(path)
+
+
+def write_quality_report(report: dict, path: Path = DATA_QUALITY_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
 
 def main() -> int:
-    """Entry point: build and persist the master dataset."""
-    logger.info("Building La Liga master dataset...")
-    master = build_master_dataset()
+    logger.info("Building/refreshing the La Liga master dataset...")
+    master, report = build_master_dataset()
 
-    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    master.to_csv(OUTPUT_PATH, index=False)
+    write_atomic(master, RAW_PATH)
+    write_quality_report(report)
 
-    counts = master["season"].value_counts().sort_index()
-    logger.info("Saved %d matches to %s", len(master), OUTPUT_PATH)
-    for season, n in counts.items():
+    logger.info("Saved %d matches to %s", len(master), RAW_PATH)
+    for season, n in master["season"].value_counts().sort_index().items():
         logger.info("  %s: %d matches", season, n)
+    for warning in report.get("warnings", []):
+        logger.warning("Data quality: %s", warning)
+    if report.get("rows_removed"):
+        logger.warning("Removed %d invalid/duplicate rows.", report["rows_removed"])
     return 0
 
 

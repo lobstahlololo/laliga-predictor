@@ -1,0 +1,62 @@
+{
+  "experiment_id": "random_forest__head_to_head__20261106T174201Z__63b9d0",
+  "timestamp": "2026-11-06T17:42:01.980654+00:00",
+  "model_type": "Random Forest",
+  "model_version": "random_forest-20261105T224238Z",
+  "feature_set": "head_to_head",
+  "variant": "",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage",
+    "h2h_home_points_5",
+    "h2h_home_goal_diff_5"
+  ],
+  "feature_count": 21,
+  "feature_hash": "df8a63f35221de17",
+  "hyperparameters": {
+    "n_estimators": 200,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt",
+    "max_depth": 5
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "log_loss": 1.0077498070502904,
+    "accuracy": 0.4631578947368421,
+    "brier_score": 0.5987393773065239,
+    "ece": 0.09320774538206379
+  },
+  "test_metrics": null,
+  "test_evaluated": false,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "rejected",
+  "notes": "Walk-forward mean log-loss=0.9994; test metrics withheld from feature selection.",
+  "walk_forward_log_loss": 0.9993574022660907,
+  "delta_validation_log_loss": -0.005370712129273203,
+  "delta_validation_ci_low": -0.012503135450899941,
+  "delta_validation_ci_high": 0.0010706907062305027,
+  "delta_walk_forward_log_loss": -0.0035221830781759778
+}

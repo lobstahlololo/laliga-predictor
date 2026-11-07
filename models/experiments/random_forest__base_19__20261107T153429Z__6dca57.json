@@ -1,0 +1,71 @@
+{
+  "experiment_id": "random_forest__base_19__20261107T153429Z__6dca57",
+  "timestamp": "2026-11-07T15:34:29.442394+00:00",
+  "model_type": "Random Forest",
+  "model_family": "tree ensemble",
+  "model_version": "phase3-20261107T153429Z",
+  "feature_set": "base_19",
+  "variant": "phase3",
+  "features": [
+    "away_form_goals_conceded",
+    "away_form_goals_scored",
+    "away_form_shots_on_target",
+    "away_form_total_shots",
+    "away_short_goals_conceded",
+    "away_short_goals_scored",
+    "home_form_goals_conceded",
+    "home_form_goals_scored",
+    "home_form_shots_on_target",
+    "home_form_total_shots",
+    "home_short_goals_conceded",
+    "home_short_goals_scored",
+    "implied_prob_home",
+    "implied_prob_draw",
+    "implied_prob_away",
+    "home_goal_diff_5m",
+    "away_goal_diff_5m",
+    "short_rest_advantage",
+    "home_advantage"
+  ],
+  "feature_count": 19,
+  "feature_hash": "e8775e1c8b126941",
+  "hyperparameters": {
+    "n_estimators": 200,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt",
+    "max_depth": 5
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.45789473684210524,
+    "log_loss": 1.0131205191795634,
+    "brier_score": 0.602694283295263,
+    "macro_f1": 0.449901321053883,
+    "draw_recall": 0.44086021505376344,
+    "draw_precision": 0.29285714285714287,
+    "ece": 0.09668468658995408,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5045871559633027,
+    "log_loss": 0.9836637881033709,
+    "brier_score": 0.581132116976198,
+    "macro_f1": 0.5047882486927516,
+    "draw_recall": 0.5555555555555556,
+    "draw_precision": 0.36585365853658536,
+    "ece": 0.08883118513627296,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "production_reference",
+  "notes": "Production reference; not changed by Phase 3. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

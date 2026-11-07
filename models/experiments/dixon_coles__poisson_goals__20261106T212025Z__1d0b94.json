@@ -1,0 +1,63 @@
+{
+  "experiment_id": "dixon_coles__poisson_goals__20261106T212025Z__1d0b94",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Dixon-Coles",
+  "model_family": "poisson",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "poisson_goals",
+  "variant": "phase3",
+  "features": [
+    "team_attack",
+    "team_defence",
+    "home_advantage",
+    "rho"
+  ],
+  "feature_count": 4,
+  "feature_hash": "4920ffdf6ad5b826",
+  "hyperparameters": {
+    "max_goals": 10,
+    "half_life_days": 365.0,
+    "prior_strength": 2.0,
+    "min_matches": 3,
+    "dixon_coles": true,
+    "rho_min": -0.15,
+    "rho_max": 0.15,
+    "rho_steps": 31,
+    "iterations": 80,
+    "minimum_weight": 0.01,
+    "rho": 0.010000000000000009
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.5263157894736842,
+    "log_loss": 0.9921713902683402,
+    "brier_score": 0.5885939423783296,
+    "macro_f1": 0.3675877192982456,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.053228159394777014,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5504587155963303,
+    "log_loss": 0.9574061951647084,
+    "brier_score": 0.5661628079599996,
+    "macro_f1": 0.406070549630845,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.07739857822448874,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "experimental_not_deployed",
+  "notes": "Same team strengths with a training-fitted low-score correction. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

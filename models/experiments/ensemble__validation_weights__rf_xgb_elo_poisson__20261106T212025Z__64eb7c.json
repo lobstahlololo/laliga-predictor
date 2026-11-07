@@ -1,0 +1,52 @@
+{
+  "experiment_id": "ensemble__validation_weights__rf_xgb_elo_poisson__20261106T212025Z__64eb7c",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Ensemble (validation weights)",
+  "model_family": "ensemble",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "rf+xgb+elo+poisson",
+  "variant": "phase3",
+  "features": [],
+  "feature_count": 0,
+  "feature_hash": "e3b0c44298fc1c14",
+  "hyperparameters": {
+    "weights": {
+      "XGBoost": 0.2,
+      "Dynamic Elo": 0.7,
+      "Independent Poisson": 0.1
+    }
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.5289473684210526,
+    "log_loss": 0.9755996277811716,
+    "brier_score": 0.5781769453772206,
+    "macro_f1": 0.3982200441929691,
+    "draw_recall": 0.043010752688172046,
+    "draw_precision": 0.4,
+    "ece": 0.048664673679941345,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5504587155963303,
+    "log_loss": 0.9279050854723382,
+    "brier_score": 0.5461116023139441,
+    "macro_f1": 0.4109199120196662,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.08659206699364493,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "validation_selected_ensemble",
+  "notes": "Weights selected on validation log-loss; test not used. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

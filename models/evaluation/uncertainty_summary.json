@@ -1,0 +1,29 @@
+{
+  "n": 109,
+  "level_counts": {
+    "high": 76,
+    "low": 23,
+    "medium": 10
+  },
+  "mean_confidence": 0.5155376668138443,
+  "mean_entropy": 0.8995304104420712,
+  "mean_agreement": 0.8781233932302633,
+  "high_uncertainty_share": 0.6972477064220184,
+  "reliability_counts": {
+    "high": 77,
+    "low": 32
+  },
+  "correlation_entropy_loss": 0.4665554628857381,
+  "correlation_agreement_loss": -0.22669817440459641,
+  "mean_loss_by_level": {
+    "high": 1.0800005955221599,
+    "low": 0.4466975076082324,
+    "medium": 0.8787566381811367
+  },
+  "accuracy_by_level": {
+    "high": 0.42105263157894735,
+    "low": 0.9130434782608695,
+    "medium": 0.7
+  },
+  "note": "Uncertainty levels are descriptive diagnostics, not calibrated confidence intervals. High probability is not certainty."
+}

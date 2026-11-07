@@ -1,0 +1,52 @@
+{
+  "experiment_id": "market_odds__market_odds__20261106T212025Z__5e7e8c",
+  "timestamp": "2026-11-06T21:20:25.607765+00:00",
+  "model_type": "Market odds",
+  "model_family": "market",
+  "model_version": "phase3-20261106T212025Z",
+  "feature_set": "market_odds",
+  "variant": "phase3",
+  "features": [
+    "odds_home",
+    "odds_draw",
+    "odds_away"
+  ],
+  "feature_count": 3,
+  "feature_hash": "6879344791e85391",
+  "hyperparameters": {
+    "overround": "removed by row normalisation"
+  },
+  "training_period": [
+    "23/24",
+    "24/25"
+  ],
+  "validation_period": "25/26",
+  "test_period": "26/27",
+  "validation_metrics": {
+    "accuracy": 0.55,
+    "log_loss": 0.9636644004887207,
+    "brier_score": 0.5710378212308005,
+    "macro_f1": 0.3876468871664567,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.044883616713948395,
+    "n_samples": 380.0
+  },
+  "test_metrics": {
+    "accuracy": 0.5688073394495413,
+    "log_loss": 0.9192022980608521,
+    "brier_score": 0.5417784750788126,
+    "macro_f1": 0.42125252525252527,
+    "draw_recall": 0.0,
+    "draw_precision": 0.0,
+    "ece": 0.08914761485945101,
+    "n_samples": 109.0
+  },
+  "test_evaluated": true,
+  "data_fingerprint": "891ca2c95e44b7ff",
+  "random_state": 42,
+  "selection_status": "benchmark",
+  "notes": "Bookmaker benchmark; overround removed, not a model. Test was not used to choose this model.",
+  "test_used_for_selection": false,
+  "deployment_status": "not_deployed"
+}

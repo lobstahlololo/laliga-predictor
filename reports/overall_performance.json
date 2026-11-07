@@ -1,0 +1,9 @@
+{
+  "predictions": 12,
+  "settled": 0,
+  "pending": 12,
+  "accuracy": NaN,
+  "log_loss": NaN,
+  "brier_score": NaN,
+  "draw_recall": NaN
+}

@@ -1,0 +1,67 @@
+{
+  "recommended_feature_set": "base_19",
+  "reason": "No candidate produced a statistically credible improvement for both models on validation and walk-forward; the deployed 19-feature set is retained.",
+  "retained": null,
+  "head_to_head_evidence": [
+    {
+      "model": "Random Forest",
+      "delta_validation_log_loss": -0.005370712129273203,
+      "delta_validation_ci_low": -0.012503135450899941,
+      "delta_validation_ci_high": 0.0010706907062305027,
+      "delta_walk_forward_log_loss": -0.0035221830781759778
+    },
+    {
+      "model": "XGBoost",
+      "delta_validation_log_loss": -0.01458759758502537,
+      "delta_validation_ci_low": -0.03359898577992199,
+      "delta_validation_ci_high": 0.002986868656612919,
+      "delta_walk_forward_log_loss": -0.008435002007247672
+    }
+  ],
+  "head_to_head_justified": false,
+  "rule": "Validation log-loss, mean walk-forward log-loss, and the 95% paired validation bootstrap upper bound must all improve for both Random Forest and XGBoost.",
+  "feature_groups": {
+    "long_form": [
+      "home_form10_goals_scored",
+      "home_form10_goals_conceded",
+      "home_form10_shots",
+      "away_form10_goals_scored",
+      "away_form10_goals_conceded",
+      "away_form10_shots"
+    ],
+    "venue_form": [
+      "home_venue_form_goals_scored",
+      "home_venue_form_goals_conceded",
+      "home_venue_form_points",
+      "away_venue_form_goals_scored",
+      "away_venue_form_goals_conceded",
+      "away_venue_form_points"
+    ],
+    "goal_trends": [
+      "home_attack_trend_3v5",
+      "home_defense_trend_3v5",
+      "away_attack_trend_3v5",
+      "away_defense_trend_3v5"
+    ],
+    "rest_detail": [
+      "home_rest_days_clean",
+      "away_rest_days_clean",
+      "rest_difference"
+    ],
+    "elo": [
+      "home_elo_pre",
+      "away_elo_pre",
+      "elo_difference"
+    ],
+    "strength_of_opposition": [
+      "home_sos_elo_5",
+      "away_sos_elo_5",
+      "sos_elo_difference"
+    ],
+    "head_to_head": [
+      "h2h_home_points_5",
+      "h2h_home_goal_diff_5"
+    ]
+  },
+  "test_used_for_selection": false
+}
