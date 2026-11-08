@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "created_at": "2026-11-07T15:42:02+00:00",
-  "updated_at": "2026-11-07T15:42:02+00:00",
+  "updated_at": "2026-11-07T16:45:46+00:00",
   "production": "random_forest-20261105T224238Z",
   "production_since": "2026-11-07T15:42:02+00:00",
   "production_history": [],
@@ -12,10 +12,10 @@
       "created_at": "2026-11-05T22:42:38.442282+00:00",
       "registered_at": "2026-11-07T15:42:02+00:00",
       "status": "production",
-      "artifact": "models\\registry\\versions\\random_forest-20261105T224238Z\\model.pkl",
+      "artifact": "models/registry/versions/random_forest-20261105T224238Z/model.pkl",
       "artifact_sha256": "62267115e37e01ad297f4536b810f8bc270111928cdcd70ae020f72797c4db2e",
-      "preprocessor": "models\\registry\\versions\\random_forest-20261105T224238Z\\preprocessor.joblib",
-      "metadata_snapshot": "models\\registry\\versions\\random_forest-20261105T224238Z\\metadata.json",
+      "preprocessor": "models/registry/versions/random_forest-20261105T224238Z/preprocessor.joblib",
+      "metadata_snapshot": "models/registry/versions/random_forest-20261105T224238Z/metadata.json",
       "feature_names": [
         "away_form_goals_conceded",
         "away_form_goals_scored",
@@ -95,7 +95,8 @@
         "reason": "first registered version becomes the initial production model",
         "evidence": null
       },
-      "notes": []
+      "notes": [],
+      "preprocessor_sha256": "e0901e9ba6d94334ce593640c794c82a82fdebbc2ea09999eaf17b2a486de40f"
     }
   }
 }

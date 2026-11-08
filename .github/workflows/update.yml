@@ -27,6 +27,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Verify production model registry
+        run: python -m src.models.registry verify
+
       - name: Refresh data, reconcile results, reports, monitoring
         env:
           LALIGA_ALERT_WEBHOOK: ${{ secrets.LALIGA_ALERT_WEBHOOK }}

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.ensemble import RandomForestClassifier
 
-from src.features.build_features import build_team_history
+from src.features.build_features import build_model_frame, build_team_history
 from src.features.preprocessing import FeaturePreprocessor
+from src.models import registry
+from src.predictions import predictor as predictor_module
 from src.predictions.fixtures import parse_fixture_line
 from src.predictions.history import (
     append_predictions,
@@ -53,6 +56,69 @@ def test_prediction_record_is_normalized_and_labeled():
     assert record["predicted_outcome"] == "Home Win"
     assert record["fixture_id"] == "20261108_Real Madrid_v_Barcelona"
     assert float(record["confidence"]) == pytest.approx(0.5)
+
+
+def test_inference_loads_registry_snapshot_after_live_artifacts_are_gone(
+    tmp_path, monkeypatch, raw_matches
+):
+    """A clean checkout must predict from the committed production snapshot."""
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.setattr(registry, "PROJECT_ROOT", checkout)
+
+    X, y, _ = build_model_frame(raw_matches)
+    preprocessor = FeaturePreprocessor(feature_names=list(FEATURE_COLUMNS)).fit(X)
+    model = RandomForestClassifier(n_estimators=5, random_state=0).fit(
+        preprocessor.transform(X), y
+    )
+
+    live_model = checkout / "models" / "saved_models" / "best_model.pkl"
+    live_model.parent.mkdir(parents=True)
+    joblib.dump(model, live_model)
+    live_pre = checkout / "data" / "processed" / "preprocessor.joblib"
+    live_pre.parent.mkdir(parents=True)
+    preprocessor.save(live_pre)
+
+    entry, created = registry.register_model(
+        {
+            "model_name": "Random Forest",
+            "model_version": "prod-snapshot-v1",
+            "feature_names": list(FEATURE_COLUMNS),
+        },
+        model_path=live_model,
+        preprocessor_path=live_pre,
+        path=checkout / "registry.json",
+        versions_dir=checkout / "models" / "registry" / "versions",
+    )
+    assert created and entry["status"] == "production"
+
+    # Simulate a fresh checkout: only registry snapshots are present.
+    live_model.unlink()
+    live_pre.unlink()
+
+    real_production_paths = registry.production_paths
+    monkeypatch.setattr(
+        registry,
+        "production_paths",
+        lambda: real_production_paths(checkout / "registry.json"),
+    )
+    raw_path = tmp_path / "laliga_matches.csv"
+    raw_matches.to_csv(raw_path, index=False)
+    monkeypatch.setattr(predictor_module, "RAW_PATH", raw_path)
+
+    loaded_model, loaded_pre, metadata = predictor_module.load_artifacts()
+    assert metadata["model_version"] == "prod-snapshot-v1"
+    assert loaded_pre.feature_names == list(FEATURE_COLUMNS)
+    assert hasattr(loaded_model, "predict_proba")
+
+    predictions, errors = predictor_module.predict_fixtures(
+        [{"home_team": "Real Madrid", "away_team": "Barcelona", "match_date": "2026-12-01"}],
+        raw=raw_matches,
+    )
+    assert errors == []
+    assert len(predictions) == 1
+    assert predictions[0]["model_version"] == "prod-snapshot-v1"
+    assert sum(predictions[0]["probs"].values()) == pytest.approx(1.0)
 
 
 def test_invalid_probabilities_rejected():

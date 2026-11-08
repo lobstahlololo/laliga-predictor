@@ -21,6 +21,12 @@ Usage:
     python -m src.models.registry promote <version> --reason "validation evidence"
     python -m src.models.registry rollback --reason "regression observed"
     python -m src.models.registry verify
+    python -m src.models.registry migrate
+
+Registry files are committed to Git and read on Linux CI as well as Windows
+machines, so every stored path is portable (forward slashes) and every relative
+path is resolved against the repository root, never against the working
+directory.
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ import argparse
 import hashlib
 import json
 import logging
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -71,6 +78,75 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# Path fields persisted in the registry. They are stored in portable form.
+REGISTRY_PATH_FIELDS = ("artifact", "preprocessor", "metadata_snapshot")
+_DRIVE_PREFIX = re.compile(r"^[A-Za-z]:/")
+
+
+def normalize_stored_path(value: str | Path) -> str:
+    """Return a registry path in portable, forward-slash form.
+
+    Windows separators are rewritten so an entry written on a developer machine
+    still resolves on Linux CI (and vice versa). Drive letters and leading
+    slashes are preserved; ``.`` and empty segments are dropped.
+    """
+    text = str(value).strip().replace("\\", "/")
+    if not text:
+        return ""
+    if _DRIVE_PREFIX.match(text):
+        prefix, remainder = f"{text[0].upper()}:/", text[3:]
+    elif text.startswith("//"):  # UNC share
+        prefix, remainder = "//", text[2:]
+    elif text.startswith("/"):
+        prefix, remainder = "/", text[1:]
+    else:
+        prefix, remainder = "", text
+    parts = [part for part in remainder.split("/") if part not in ("", ".")]
+    return prefix + "/".join(parts)
+
+
+def resolve_stored_path(value: str | Path) -> Path:
+    """Resolve a stored registry path against the repository root.
+
+    Relative entries are anchored at ``PROJECT_ROOT`` rather than the current
+    working directory, so ``python -m src.models.registry verify`` behaves the
+    same whether it runs from the repo root, CI, or another directory.
+    """
+    text = normalize_stored_path(value)
+    if not text:
+        return Path()
+    path = Path(text)
+    if path.is_absolute() or _DRIVE_PREFIX.match(text):
+        return path
+    return PROJECT_ROOT / path
+
+
+def normalize_registry_paths(registry: dict) -> list[str]:
+    """Rewrite every registry path field to portable form in place.
+
+    Returns the versions whose stored paths changed. Artifact bytes are never
+    touched here, so immutable snapshots remain immutable.
+    """
+    changed_versions: list[str] = []
+    versions = registry.get("versions")
+    if not isinstance(versions, dict):
+        return changed_versions
+    for version, entry in versions.items():
+        if not isinstance(entry, dict):
+            continue
+        changed = False
+        for field in REGISTRY_PATH_FIELDS:
+            value = entry.get(field)
+            if isinstance(value, str) and value.strip():
+                portable = normalize_stored_path(value)
+                if portable != value:
+                    entry[field] = portable
+                    changed = True
+        if changed:
+            changed_versions.append(version)
+    return changed_versions
+
+
 def empty_registry() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -83,16 +159,12 @@ def empty_registry() -> dict:
     }
 
 
-def load_registry(path: Path = REGISTRY_PATH) -> dict:
-    """Load the registry, returning an empty structure when absent.
-
-    A corrupt registry is an error: silently discarding version history would
-    make rollback impossible.
-    """
-    if not path.exists():
+def _read_registry(path: Path) -> dict:
+    """Read the registry exactly as stored, without normalising it."""
+    if not Path(path).exists():
         return empty_registry()
     try:
-        registry = json.loads(path.read_text(encoding="utf-8"))
+        registry = json.loads(Path(path).read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001 - corruption must be explicit
         raise RegistryError(f"Registry at {path} is unreadable: {exc}") from exc
     if not isinstance(registry, dict) or "versions" not in registry:
@@ -104,8 +176,22 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict:
     return registry
 
 
+def load_registry(path: Path = REGISTRY_PATH) -> dict:
+    """Load the registry, returning an empty structure when absent.
+
+    Legacy entries written with Windows separators are normalised in memory so
+    they resolve on every platform. A corrupt registry is an error: silently
+    discarding version history would make rollback impossible.
+    """
+    registry = _read_registry(path)
+    normalize_registry_paths(registry)
+    return registry
+
+
 def save_registry(registry: dict, path: Path = REGISTRY_PATH) -> None:
-    """Atomically persist the registry."""
+    """Atomically persist the registry with portable paths."""
+    normalize_registry_paths(registry)
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     registry["updated_at"] = _now()
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -115,10 +201,32 @@ def save_registry(registry: dict, path: Path = REGISTRY_PATH) -> None:
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
+    with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _backfill_preprocessor_hashes(registry: dict) -> list[str]:
+    """Record a hash for snapshots registered before preprocessor hashing.
+
+    Only the manifest changes; the snapshot file is never rewritten.
+    """
+    backfilled: list[str] = []
+    versions = registry.get("versions")
+    if not isinstance(versions, dict):
+        return backfilled
+    for version, entry in versions.items():
+        if not isinstance(entry, dict) or entry.get("preprocessor_sha256"):
+            continue
+        stored = entry.get("preprocessor")
+        if not stored:
+            continue
+        snapshot = resolve_stored_path(stored)
+        if snapshot.is_file():
+            entry["preprocessor_sha256"] = _sha256(snapshot)
+            backfilled.append(version)
+    return backfilled
 
 
 def feature_set_hash(feature_names: list[str] | None = None) -> str:
@@ -132,11 +240,17 @@ def _version_dir(version: str, base: Path = REGISTRY_VERSIONS_DIR) -> Path:
 
 
 def _stored_path(path: Path) -> str:
-    """Store project-relative paths when possible, absolute otherwise."""
+    """Store project-relative paths when possible, absolute otherwise.
+
+    The result always uses forward slashes so the registry stays readable on
+    every platform.
+    """
+    resolved = Path(path).resolve()
     try:
-        return str(Path(path).resolve().relative_to(PROJECT_ROOT))
+        relative = resolved.relative_to(PROJECT_ROOT.resolve())
     except ValueError:
-        return str(Path(path).resolve())
+        return normalize_stored_path(resolved)
+    return normalize_stored_path(relative)
 
 
 def _period_from_split(split: dict, key: str) -> dict:
@@ -181,10 +295,12 @@ def register_model(
     artifact = snapshot / "model.pkl"
     shutil.copy2(model_path, artifact)
     preprocessor_snapshot = ""
+    preprocessor_sha256 = ""
     if Path(preprocessor_path).exists():
         preprocessor_target = snapshot / "preprocessor.joblib"
         shutil.copy2(preprocessor_path, preprocessor_target)
         preprocessor_snapshot = _stored_path(preprocessor_target)
+        preprocessor_sha256 = _sha256(preprocessor_target)
     (snapshot / "metadata.json").write_text(
         json.dumps(metadata, indent=2, default=str), encoding="utf-8"
     )
@@ -200,6 +316,7 @@ def register_model(
         "artifact": _stored_path(artifact),
         "artifact_sha256": _sha256(artifact),
         "preprocessor": preprocessor_snapshot,
+        "preprocessor_sha256": preprocessor_sha256,
         "metadata_snapshot": _stored_path(snapshot / "metadata.json"),
         "feature_names": list(feature_names),
         "feature_count": len(feature_names),
@@ -345,12 +462,12 @@ def production_paths(path: Path = REGISTRY_PATH) -> dict:
     resolved = {
         "version": entry["version"],
         "entry": entry,
-        "model": PROJECT_ROOT / entry["artifact"],
-        "metadata": PROJECT_ROOT / entry["metadata_snapshot"],
+        "model": resolve_stored_path(entry["artifact"]),
+        "metadata": resolve_stored_path(entry["metadata_snapshot"]),
         "preprocessor": None,
     }
     if entry.get("preprocessor"):
-        resolved["preprocessor"] = PROJECT_ROOT / entry["preprocessor"]
+        resolved["preprocessor"] = resolve_stored_path(entry["preprocessor"])
     return resolved
 
 
@@ -381,7 +498,7 @@ def _restore_snapshot(
     preprocessor_target: Path = DEFAULT_PREPROCESSOR_PATH,
 ) -> None:
     """Copy a version snapshot back to the live inference paths."""
-    artifact = PROJECT_ROOT / entry["artifact"]
+    artifact = resolve_stored_path(entry["artifact"])
     if not artifact.exists():
         raise RegistryError(f"Snapshot artifact is missing: {artifact}")
     expected = entry.get("artifact_sha256")
@@ -392,7 +509,7 @@ def _restore_snapshot(
     Path(model_target).parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(artifact, model_target)
 
-    snapshot_meta = PROJECT_ROOT / entry["metadata_snapshot"]
+    snapshot_meta = resolve_stored_path(entry["metadata_snapshot"])
     if snapshot_meta.exists():
         Path(metadata_target).parent.mkdir(parents=True, exist_ok=True)
         deployed = json.loads(snapshot_meta.read_text(encoding="utf-8"))
@@ -405,7 +522,7 @@ def _restore_snapshot(
 
     preprocessor = entry.get("preprocessor")
     if preprocessor:
-        source = PROJECT_ROOT / preprocessor
+        source = resolve_stored_path(preprocessor)
         if source.exists():
             Path(preprocessor_target).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, preprocessor_target)
@@ -514,7 +631,7 @@ def rollback(
 
 
 def verify(version: str | None = None, path: Path = REGISTRY_PATH) -> list[dict]:
-    """Check artifact hashes and feature order for one or all versions."""
+    """Check artifact/preprocessor hashes and feature order for versions."""
     registry = load_registry(path)
     versions = [version] if version else list(registry["versions"])
     results = []
@@ -524,19 +641,56 @@ def verify(version: str | None = None, path: Path = REGISTRY_PATH) -> list[dict]
             results.append({"version": name, "ok": False, "problems": ["unknown version"]})
             continue
         problems = []
-        artifact = PROJECT_ROOT / entry.get("artifact", "")
-        if not artifact.exists():
-            problems.append(f"artifact missing: {artifact}")
-        elif entry.get("artifact_sha256") and _sha256(artifact) != entry["artifact_sha256"]:
-            problems.append("artifact hash mismatch")
+        stored_artifact = entry.get("artifact")
+        if not stored_artifact:
+            problems.append("artifact path is not recorded")
+        else:
+            artifact = resolve_stored_path(stored_artifact)
+            if not artifact.exists():
+                problems.append(f"artifact missing: {_stored_path(artifact)}")
+            elif entry.get("artifact_sha256") and _sha256(artifact) != entry["artifact_sha256"]:
+                problems.append("artifact hash mismatch")
         if entry.get("feature_names") != list(FEATURE_COLUMNS):
             problems.append("feature order differs from FEATURE_COLUMNS")
         elif feature_set_hash() != entry.get("feature_set_hash"):
             problems.append("feature set hash mismatch")
-        if entry.get("preprocessor") and not (PROJECT_ROOT / entry["preprocessor"]).exists():
-            problems.append("preprocessor snapshot missing")
+        stored_pre = entry.get("preprocessor")
+        if stored_pre:
+            preprocessor = resolve_stored_path(stored_pre)
+            if not preprocessor.exists():
+                problems.append(f"preprocessor snapshot missing: {_stored_path(preprocessor)}")
+            elif (
+                entry.get("preprocessor_sha256")
+                and _sha256(preprocessor) != entry["preprocessor_sha256"]
+            ):
+                problems.append("preprocessor snapshot hash mismatch")
+        stored_meta = entry.get("metadata_snapshot")
+        if stored_meta:
+            meta_path = resolve_stored_path(stored_meta)
+            if not meta_path.exists():
+                problems.append(f"metadata snapshot missing: {_stored_path(meta_path)}")
         results.append({"version": name, "ok": not problems, "problems": problems})
     return results
+
+
+def migrate_registry(path: Path = REGISTRY_PATH) -> dict:
+    """Migrate legacy registry entries in place, safely.
+
+    Rewrites Windows-style path fields to portable forward-slash form and, for
+    snapshots registered before preprocessor hashing existed, records the
+    SHA-256 of the snapshot on disk. Model/preprocessor files are never
+    modified, so immutable snapshots and recorded model hashes are preserved.
+    """
+    path = Path(path)
+    report = {"path": _stored_path(path), "migrated_paths": [], "backfilled_hashes": []}
+    if not path.exists():
+        return report
+    registry = _read_registry(path)
+    report["migrated_paths"] = normalize_registry_paths(registry)
+    report["backfilled_hashes"] = _backfill_preprocessor_hashes(registry)
+    if report["migrated_paths"] or report["backfilled_hashes"]:
+        save_registry(registry, path)
+    return report
 
 
 def status(path: Path = REGISTRY_PATH) -> dict:
@@ -569,6 +723,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("list", help="List every registered version")
     sub.add_parser("register", help="Register the latest training artifacts")
     sub.add_parser("verify", help="Verify artifact hashes")
+    sub.add_parser("migrate", help="Normalise legacy registry paths and backfill hashes")
 
     promote_parser = sub.add_parser("promote", help="Promote a version to production")
     promote_parser.add_argument("version")
@@ -621,6 +776,16 @@ def main(argv: list[str] | None = None) -> int:
                 for problem in result["problems"]:
                     print(f"  - {problem}")
             return 0 if all(r["ok"] for r in results) else 1
+
+        if args.command == "migrate":
+            report = migrate_registry()
+            if report["migrated_paths"]:
+                print(f"Normalised registry paths: {', '.join(report['migrated_paths'])}")
+            if report["backfilled_hashes"]:
+                print(f"Recorded preprocessor hashes: {', '.join(report['backfilled_hashes'])}")
+            if not report["migrated_paths"] and not report["backfilled_hashes"]:
+                print("Registry paths are already portable; nothing to migrate.")
+            return 0
 
         if args.command == "promote":
             entry = promote(args.version, reason=args.reason)

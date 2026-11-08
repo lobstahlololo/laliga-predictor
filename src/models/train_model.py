@@ -483,8 +483,9 @@ def _save_artifacts(
     joblib.dump(selected_model, candidate_model_path)
     preprocessor.save(candidate_pre_path)
 
-    metadata["selected_model_path"] = str(candidate_model_path.relative_to(PROJECT_ROOT))
-    metadata["preprocessor_path"] = str(candidate_pre_path.relative_to(PROJECT_ROOT))
+    # Portable, repo-relative paths: metadata is committed and read on Linux CI.
+    metadata["selected_model_path"] = candidate_model_path.relative_to(PROJECT_ROOT).as_posix()
+    metadata["preprocessor_path"] = candidate_pre_path.relative_to(PROJECT_ROOT).as_posix()
 
     from src.models import registry
 
