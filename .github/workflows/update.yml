@@ -10,10 +10,16 @@ concurrency:
   group: daily-update
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -26,18 +32,37 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+          python -m pip check
 
-      - name: Verify production model registry
+      - name: Verify production model registry before the cycle
         run: python -m src.models.registry verify
 
-      - name: Refresh data, reconcile results, reports, monitoring
+      - name: Refresh data, audit, predict, reconcile, report and monitor
         env:
           LALIGA_ALERT_WEBHOOK: ${{ secrets.LALIGA_ALERT_WEBHOOK }}
           # Optional: a personal TheSportsDB/API-Football key. The free public
           # key is used when the secret is unset.
           LALIGA_FOOTBALL_API_KEY: ${{ secrets.LALIGA_FOOTBALL_API_KEY }}
           LALIGA_FIXTURE_PROVIDER: thesportsdb
-        run: python -m src.pipeline.automation --steps data,predict,backfill,reports,monitoring --retries 2
+          LALIGA_FIXTURE_DISCOVERY: "1"
+          # Record provider freshness/failure telemetry for operations.
+          LALIGA_FIXTURE_TELEMETRY: "1"
+        run: |
+          python -m src.pipeline.automation \
+            --steps data,quality,coverage,predict,backfill,reports,monitoring \
+            --retries 2
+
+      - name: Verify production registry after the cycle
+        run: python -m src.models.registry verify
+
+      - name: Ensure scheduled update did not overwrite registry snapshots
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain models/registry)" ]; then
+            echo "Registry artifacts changed during a scheduled update:"
+            git status --porcelain models/registry
+            exit 1
+          fi
 
       - name: Upload operational artifacts
         if: always()
@@ -48,5 +73,6 @@ jobs:
             reports/
             logs/
             models/evaluation/
+            data/processed/fixture_provider_status.json
           retention-days: 14
           if-no-files-found: warn

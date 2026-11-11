@@ -1,0 +1,88 @@
+{
+  "generated_at": "2026-11-11T00:28:17+00:00",
+  "protocol": {
+    "train_seasons": [
+      "23/24",
+      "24/25"
+    ],
+    "validation_season": "25/26",
+    "test_season": "26/27",
+    "test_used_for_selection": false,
+    "selection_rule": "lowest validation log-loss; Brier breaks ties",
+    "ensemble_weights_selected_on": "validation only",
+    "min_breakdown_samples": 20,
+    "bootstrap_draws": 1000
+  },
+  "data": {
+    "rows": 1259,
+    "seasons": [
+      "23/24",
+      "24/25",
+      "25/26",
+      "26/27"
+    ],
+    "train_rows": 760,
+    "validation_rows": 380,
+    "test_rows": 119,
+    "date_min": "2023-08-11",
+    "date_max": "2026-11-08"
+  },
+  "ensemble": {
+    "weights": {
+      "Random Forest": 0.0,
+      "XGBoost": 0.2,
+      "Dynamic Elo": 0.7,
+      "Independent Poisson": 0.1
+    },
+    "equal_weights": {
+      "Random Forest": 0.25,
+      "XGBoost": 0.25,
+      "Dynamic Elo": 0.25,
+      "Independent Poisson": 0.25
+    },
+    "validation_log_loss": 0.9760043405167345,
+    "equal_validation_log_loss": 0.9826013822373884
+  },
+  "validation_best_learned_model": {
+    "model": "Ensemble (validation)",
+    "accuracy": 0.5289473684210526,
+    "log_loss": 0.9760043405167345,
+    "brier_score": 0.5786085499317412,
+    "macro_f1": 0.3875192546540143,
+    "draw_recall": 0.021505376344086023,
+    "ece": 0.0497650341767723
+  },
+  "test_best_log_loss_model": {
+    "model": "Market odds",
+    "accuracy": 0.5630252100840336,
+    "log_loss": 0.9171424993713725,
+    "brier_score": 0.5404569537007582,
+    "macro_f1": 0.4237621079726343,
+    "draw_recall": 0.0,
+    "ece": 0.08185645124115691
+  },
+  "production_reference": {
+    "version": "random_forest-20261105T224238Z",
+    "model_name": "Random Forest",
+    "status": "unchanged"
+  },
+  "provenance": {
+    "validation": "holdout season, used for selection",
+    "test": "untouched final season, scored once",
+    "walk_forward": "rolling-origin folds, final test excluded",
+    "live": "not measured in this report"
+  },
+  "artifacts": {
+    "metrics": "C:\\Users\\indor\\laliga-predictor\\models\\evaluation\\full_season_metrics.csv",
+    "breakdowns": "C:\\Users\\indor\\laliga-predictor\\models\\evaluation\\full_season_breakdowns.csv",
+    "walk_forward": "C:\\Users\\indor\\laliga-predictor\\models\\evaluation\\full_season_walk_forward.csv",
+    "summary": "C:\\Users\\indor\\laliga-predictor\\models\\evaluation\\full_season_summary.json",
+    "report": "C:\\Users\\indor\\laliga-predictor\\reports\\full_season_evaluation.md"
+  },
+  "notes": [
+    "Test metrics confirm the validation decision; they are not used to choose a model.",
+    "Intervals overlap for close models; no improvement is claimed from a point estimate.",
+    "Market odds are a benchmark and also a tree-model input.",
+    "Historical xG and player availability were unavailable; no such improvement is claimed."
+  ]
+}

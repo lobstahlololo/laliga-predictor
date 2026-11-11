@@ -115,6 +115,33 @@ PHASE3_REPORT_PATH = REPORTS_DIR / "phase3_report.md"
 MONITORING_REPORT_PATH = REPORTS_DIR / "monitoring_report.json"
 DASHBOARD_DIR = PROJECT_ROOT / "dashboard"
 
+# Phase 6: data quality, coverage, historical sources and full-season evaluation.
+# Reports are generated artifacts; source data is never rewritten by an audit.
+DATA_QUALITY_REPORT_PATH = REPORTS_DIR / "data_quality.json"
+DATA_QUALITY_COLUMNS_PATH = REPORTS_DIR / "data_quality_by_column.csv"
+DATA_QUALITY_SEASONS_PATH = REPORTS_DIR / "data_quality_by_season.csv"
+DATA_QUALITY_MARKDOWN_PATH = REPORTS_DIR / "data_quality.md"
+FIXTURE_COVERAGE_JSON_PATH = REPORTS_DIR / "fixture_coverage.json"
+FIXTURE_COVERAGE_CSV_PATH = REPORTS_DIR / "fixture_coverage_by_team_season.csv"
+FIXTURE_COVERAGE_REPORT_PATH = REPORTS_DIR / "fixture_coverage.md"
+PROVIDER_STATUS_PATH = PROCESSED_DIR / "fixture_provider_status.json"
+HISTORICAL_SOURCE_AUDIT_PATH = REPORTS_DIR / "historical_sources.json"
+HISTORICAL_SOURCE_AUDIT_MARKDOWN_PATH = REPORTS_DIR / "historical_sources.md"
+FULL_SEASON_METRICS_PATH = EVAL_DIR / "full_season_metrics.csv"
+FULL_SEASON_BREAKDOWNS_PATH = EVAL_DIR / "full_season_breakdowns.csv"
+FULL_SEASON_WALK_FORWARD_PATH = EVAL_DIR / "full_season_walk_forward.csv"
+FULL_SEASON_SUMMARY_PATH = EVAL_DIR / "full_season_summary.json"
+FULL_SEASON_REPORT_PATH = REPORTS_DIR / "full_season_evaluation.md"
+PREDICTION_MONITORING_PATH = REPORTS_DIR / "prediction_monitoring.json"
+PREDICTION_MONITORING_MARKDOWN_PATH = REPORTS_DIR / "prediction_monitoring.md"
+
+# Coverage and quality thresholds. These are configuration, not fitted values.
+MIN_FULL_SEASON_MATCHES = 340
+MAX_EXPECTED_SEASON_MATCHES = 420
+MAX_INVALID_SCORE = 20
+MIN_BREAKDOWN_SAMPLES = 20
+FULL_SEASON_BOOTSTRAP_DRAWS = 1000
+
 # ---------------------------------------------------------------------------
 # Dataset / split configuration
 # ---------------------------------------------------------------------------

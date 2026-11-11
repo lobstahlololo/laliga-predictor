@@ -35,6 +35,16 @@ python main.py train
 python -m src.models.registry register
 ```
 
+Audit the data, coverage and evaluation before deploying:
+
+```bash
+python main.py quality
+python main.py coverage
+python main.py sources
+python main.py evaluation
+python main.py monitor
+```
+
 Then run the dashboard (`python main.py dashboard`) or API (`python main.py api`).
 
 ### Environment variables
@@ -45,6 +55,15 @@ Then run the dashboard (`python main.py dashboard`) or API (`python main.py api`
 | `LALIGA_API_PORT` | `8000` | FastAPI port |
 | `LALIGA_ALERT_WEBHOOK` | unset | JSON POST target for failed update cycles |
 | `LALIGA_ALERT_TIMEOUT` | `10` | Webhook timeout in seconds |
+| `LALIGA_FIXTURE_PROVIDER` | `thesportsdb` | `thesportsdb`, `api-football`, or a disabled value |
+| `LALIGA_FIXTURE_DISCOVERY` | `1` | `0` disables network fixture discovery |
+| `LALIGA_FOOTBALL_API_KEY` | unset | Optional personal provider key |
+| `LALIGA_FOOTBALL_API_BASE` | provider default | Optional base URL override |
+| `LALIGA_FOOTBALL_LEAGUE_ID` | `4335` / `140` | Optional league ID override |
+| `LALIGA_FIXTURE_TELEMETRY` | `0` | `1` records provider freshness/failure telemetry in scheduled runs |
+| `LALIGA_CACHE_BACKEND` | `memory` | `memory`, `redis`, or `none` |
+| `LALIGA_CACHE_TTL` | `300` | Default cache TTL in seconds |
+| `LALIGA_REDIS_URL` | `redis://localhost:6379/0` | Redis URL; unreachable Redis degrades to memory |
 
 Copy `.env.example` to `.env`. `.env`, `.streamlit/secrets.toml` and `logs/` are
 git-ignored; no credential is required for any core feature.
@@ -103,18 +122,25 @@ to accumulate.
 One cycle is:
 
 ```
-data → predict → backfill → reports → monitoring
+data → quality → coverage → predict → backfill → reports → monitoring
 ```
 
 and is safe to repeat: downloads merge and de-duplicate, predictions are keyed by
 fixture/timestamp/model version, and reconciliation only fills blank results.
+The cycle never registers, promotes or overwrites a registry snapshot; set
+`LALIGA_FIXTURE_TELEMETRY=1` to record provider freshness/failure state.
 
 ### GitHub Actions (included)
 
-`.github/workflows/update.yml` runs daily at 06:15 UTC and on demand. It uploads
-`reports/`, `logs/` and `models/evaluation/` as workflow artifacts. It does not
-commit generated files back to the repository; add an explicit commit step only
-if you intend to version the ledger.
+`.github/workflows/update.yml` runs daily at 06:15 UTC and on demand. It runs the
+data-quality and coverage audits, records provider telemetry, and uploads
+`reports/`, `logs/`, `models/evaluation/` and the provider-status file as workflow
+artifacts. It verifies the registry before and after the cycle and fails if any
+file under `models/registry/` changed. It does not commit generated files back to
+the repository; add an explicit commit step only if you intend to version the
+ledger. `ci.yml` runs the test suite, registry verification, all Phase 6 audits,
+the full-season evaluation and a credential-free pipeline smoke test on both
+Ubuntu and Windows.
 
 Add the webhook as a repository secret named `LALIGA_ALERT_WEBHOOK` to receive
 failure notifications.
@@ -156,7 +182,9 @@ python -m src.models.registry verify
 Promotion requires the challenger's **validation** log-loss to be strictly better
 than production's and validation Brier not worse. Test metrics are recorded but
 never used to decide a promotion. Missing metrics block promotion. Rollback
-restores the previous snapshot and re-checks artifact hashes first.
+restores the previous snapshot and re-checks artifact hashes first. Scheduled
+update cycles only refresh data, predictions and reports; they never register or
+promote a model, and the workflow fails if `models/registry/` changes.
 
 ---
 
@@ -196,6 +224,16 @@ model artifacts or an unreadable registry. OpenAPI docs are served at `/docs`.
 | Dashboard | `streamlit run dashboard/app.py` | eight pages, AppTest smoke test in suite |
 | API | `uvicorn src.api.main:app` | all endpoints exercised by `tests/test_api.py` |
 | Clean environment | `pip install -r requirements.txt` in a fresh venv | no credentials or external services required |
+| Data-quality audit | `python main.py quality` | 0 errors on the current cache; JSON/CSV/Markdown written |
+| Fixture coverage | `python main.py coverage` | 1 upcoming fixture from one provider; schedule marked incomplete, not fabricated |
+| Historical sources | `python main.py sources` | xG and availability unavailable; 0 network requests |
+| Full-season evaluation | `python main.py evaluation` | validation-selected ensemble, one-shot 119-match test, bootstrap intervals |
+| Live monitoring | `python main.py monitor` | 0 settled rows, explicitly `insufficient_data` |
+| Registry | `python -m src.models.registry verify` | `random_forest-20261105T224238Z: OK`; unchanged |
+
+Linux and Windows CI are configured in `.github/workflows/ci.yml`. They were not
+executed from this Windows development environment, so this table does not claim
+a Linux pass.
 
 ---
 

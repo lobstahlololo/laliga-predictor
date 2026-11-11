@@ -1,0 +1,159 @@
+{
+  "generated_at": "2026-11-11T00:27:18+00:00",
+  "status": "ok",
+  "rows": 1259,
+  "columns": 19,
+  "required_columns_present": [
+    "away_shots",
+    "away_shots_on_target",
+    "away_team",
+    "date",
+    "full_time_away_goals",
+    "full_time_home_goals",
+    "full_time_result",
+    "home_shots",
+    "home_shots_on_target",
+    "home_team",
+    "odds_away",
+    "odds_draw",
+    "odds_home"
+  ],
+  "required_columns_missing": [],
+  "seasons": {
+    "count": 4,
+    "table": [
+      {
+        "season": "23/24",
+        "matches": 380,
+        "teams": 20,
+        "date_min": "2023-08-11",
+        "date_max": "2024-05-26",
+        "age_days": 899,
+        "status": "ok"
+      },
+      {
+        "season": "24/25",
+        "matches": 380,
+        "teams": 20,
+        "date_min": "2024-08-15",
+        "date_max": "2025-05-25",
+        "age_days": 535,
+        "status": "ok"
+      },
+      {
+        "season": "25/26",
+        "matches": 380,
+        "teams": 20,
+        "date_min": "2025-08-15",
+        "date_max": "2026-05-24",
+        "age_days": 171,
+        "status": "ok"
+      },
+      {
+        "season": "26/27",
+        "matches": 119,
+        "teams": 20,
+        "date_min": "2026-08-15",
+        "date_max": "2026-11-08",
+        "age_days": 3,
+        "status": "in_progress"
+      }
+    ],
+    "latest": "26/27"
+  },
+  "duplicates": {
+    "duplicate_fixture_rows": 0,
+    "duplicate_pairing_rows": 0,
+    "exact_duplicate_rows": 0
+  },
+  "team_names": {
+    "inconsistent_rows": 0,
+    "distinct_values": 0,
+    "examples": []
+  },
+  "invalid_scores": {
+    "non_numeric": 0,
+    "negative": 0,
+    "too_large": 0,
+    "non_integer": 0,
+    "missing": 0,
+    "score_result_mismatch": 0
+  },
+  "invalid_dates": {
+    "unparseable": 0,
+    "future": 0,
+    "before_earliest": 0
+  },
+  "chronology": {
+    "sorted_ascending": true,
+    "ordering_violations": 0,
+    "same_team_same_day": 0,
+    "match_id_date_mismatches": 0
+  },
+  "missing_odds": {
+    "rows": 0,
+    "fraction": 0.0,
+    "invalid_odds_rows": 0
+  },
+  "missing_values": {},
+  "features": {
+    "audited": true,
+    "n_features": 19,
+    "rows": 1259,
+    "rows_fully_available": 1241,
+    "feature_coverage_fraction": 0.9857029388403494,
+    "max_missing_fraction": 0.011914217633042097,
+    "features_over_threshold": [],
+    "missing_by_feature": {
+      "away_form_goals_conceded": 0.011914217633042097,
+      "away_form_goals_scored": 0.011914217633042097,
+      "away_form_shots_on_target": 0.011914217633042097,
+      "away_form_total_shots": 0.011914217633042097,
+      "away_short_goals_conceded": 0.011914217633042097,
+      "away_short_goals_scored": 0.011914217633042097,
+      "home_form_goals_conceded": 0.011119936457505957,
+      "home_form_goals_scored": 0.011119936457505957,
+      "home_form_shots_on_target": 0.011119936457505957,
+      "home_form_total_shots": 0.011119936457505957,
+      "home_short_goals_conceded": 0.011119936457505957,
+      "home_short_goals_scored": 0.011119936457505957,
+      "home_goal_diff_5m": 0.011119936457505957,
+      "away_goal_diff_5m": 0.011914217633042097
+    },
+    "prediction_time_columns_present": [
+      "match_id",
+      "date",
+      "home_team",
+      "away_team",
+      "season"
+    ],
+    "prediction_time_columns_missing": []
+  },
+  "thresholds": {
+    "max_missing_fraction": 0.05,
+    "max_missing_odds_fraction": 0.02,
+    "max_invalid_rows": 0,
+    "min_season_matches": 340,
+    "max_season_matches": 420,
+    "max_invalid_score": 20,
+    "stale_days": 14,
+    "min_feature_coverage": 0.95,
+    "future_grace_days": 0,
+    "earliest_year": 2000
+  },
+  "findings": [],
+  "notes": [
+    "This audit never deletes or rewrites data.",
+    "An in-progress season is allowed to be smaller than a full season."
+  ],
+  "freshness": {
+    "latest_match_date": "2026-11-08",
+    "age_days": 3,
+    "stale": false
+  },
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "passed": true
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "generated_at": "2026-11-11T00:33:23+00:00",
+  "overall_status": "warning",
+  "live_performance_reliable": false,
+  "conclusions_allowed": false,
+  "minimum_settled_sample": 30,
+  "counts": {
+    "prediction_rows": 17,
+    "unique_fixtures": 3,
+    "multiple_snapshot_fixtures": 2,
+    "settled_rows": 0,
+    "pending_rows": 17,
+    "settled_unique_fixtures": 0,
+    "missing_predictions": 0,
+    "overdue_pending": 0,
+    "invalid_probability_rows": 0,
+    "prediction_errors": 0
+  },
+  "metrics": {},
+  "per_class": [],
+  "drift": {},
+  "freshness": {
+    "latest_match_date": "2026-11-08",
+    "match_age_days": 3,
+    "latest_prediction_at": "2026-11-03T00:00:00Z",
+    "prediction_age_days": 8,
+    "fixtures_newest_fetched_at": null,
+    "fixtures_age_days": null
+  },
+  "fixture_coverage": {
+    "status": "warning",
+    "upcoming": {
+      "n": 1,
+      "providers": [
+        "thesportsdb"
+      ],
+      "status_counts": {
+        "scheduled": 1
+      },
+      "teams_covered": 2,
+      "teams_without_fixtures": [
+        "Alaves",
+        "Ath Bilbao",
+        "Ath Madrid",
+        "Betis",
+        "Celta",
+        "Elche",
+        "Espanol",
+        "Getafe",
+        "La Coruna",
+        "Levante",
+        "Malaga",
+        "Osasuna",
+        "Real Madrid",
+        "Santander",
+        "Sevilla",
+        "Sociedad",
+        "Valencia",
+        "Vallecano"
+      ],
+      "missing_dates": 0,
+      "duplicate_fixture_ids": 0,
+      "conflicting_fixtures": 0,
+      "unresolved_scheduled": 1,
+      "oldest_fetched_at": "2026-11-10T23:55:50Z",
+      "newest_fetched_at": "2026-11-10T23:55:50Z",
+      "stale_snapshots": 0,
+      "schedule_completeness": "unknown_partial_provider_window",
+      "expected_fixtures": null
+    },
+    "warnings": [
+      "No upcoming fixture was returned for: Alaves, Ath Bilbao, Ath Madrid, Betis, Celta, Elche, Espanol, Getafe, La Coruna, Levante, Malaga, Osasuna, Real Madrid, Santander, Sevilla, Sociedad, Valencia, Vallecano. The provider window may be incomplete; this is not proof that the fixtures do not exist.",
+      "Teams present in reference season 25/26 but absent from the latest season: Girona, Mallorca, Oviedo."
+    ]
+  },
+  "checks": [
+    {
+      "name": "prediction_counts",
+      "status": "ok",
+      "message": "17 prediction rows cover 3 fixtures; 0 settled, 17 pending.",
+      "details": {
+        "prediction_rows": 17,
+        "unique_fixtures": 3,
+        "multiple_snapshot_fixtures": 2,
+        "settled_rows": 0,
+        "pending_rows": 17,
+        "settled_unique_fixtures": 0,
+        "missing_predictions": 0,
+        "overdue_pending": 0,
+        "invalid_probability_rows": 0,
+        "prediction_errors": 0
+      }
+    },
+    {
+      "name": "missing_predictions",
+      "status": "ok",
+      "message": "Every configured dated upcoming fixture has a prediction.",
+      "details": {
+        "missing": 0
+      }
+    },
+    {
+      "name": "prediction_errors",
+      "status": "ok",
+      "message": "0 row(s) have invalid probabilities; 0 settled-age row(s) are still pending.",
+      "details": {
+        "invalid_probability_rows": 0,
+        "overdue_pending": 0
+      }
+    },
+    {
+      "name": "settled_performance",
+      "status": "insufficient_data",
+      "message": "No settled predictions yet; performance and calibration are unknown.",
+      "details": {}
+    },
+    {
+      "name": "data_freshness",
+      "status": "ok",
+      "message": "Data and fixture freshness are within threshold.",
+      "details": {
+        "latest_match_date": "2026-11-08",
+        "match_age_days": 3,
+        "latest_prediction_at": "2026-11-03T00:00:00Z",
+        "prediction_age_days": 8,
+        "fixtures_newest_fetched_at": null,
+        "fixtures_age_days": null
+      }
+    },
+    {
+      "name": "fixture_coverage",
+      "status": "warning",
+      "message": "1 upcoming fixture(s) stored; schedule completeness is unknown_partial_provider_window.",
+      "details": {
+        "warnings": [
+          "No upcoming fixture was returned for: Alaves, Ath Bilbao, Ath Madrid, Betis, Celta, Elche, Espanol, Getafe, La Coruna, Levante, Malaga, Osasuna, Real Madrid, Santander, Sevilla, Sociedad, Valencia, Vallecano. The provider window may be incomplete; this is not proof that the fixtures do not exist.",
+          "Teams present in reference season 25/26 but absent from the latest season: Girona, Mallorca, Oviedo."
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "Live metrics below the minimum settled sample are not conclusions.",
+    "A confirmed drift label requires a sufficiently large sample and a supportive bootstrap interval.",
+    "This monitor never retrains, promotes or rewrites a model."
+  ],
+  "ledger_path": "C:\\Users\\indor\\laliga-predictor\\data\\processed\\prediction_history.csv",
+  "raw_path": "C:\\Users\\indor\\laliga-predictor\\data\\raw\\laliga_matches.csv",
+  "fixtures_path": "C:\\Users\\indor\\laliga-predictor\\data\\raw\\upcoming_fixtures.csv"
+}

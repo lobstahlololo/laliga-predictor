@@ -59,12 +59,13 @@ from src.utils.config import (  # noqa: E402
     MODEL_METADATA_PATH,
     PIPELINE_LOG_PATH,
     PIPELINE_RUNS_PATH,
+    PROVIDER_STATUS_PATH,
     RAW_PATH,
 )
 
 logger = logging.getLogger(__name__)
 
-STEP_ORDER = ("data", "predict", "backfill", "reports", "monitoring")
+STEP_ORDER = ("data", "quality", "coverage", "predict", "backfill", "reports", "monitoring")
 ALERT_WEBHOOK_ENV = "LALIGA_ALERT_WEBHOOK"
 ALERT_TIMEOUT_ENV = "LALIGA_ALERT_TIMEOUT"
 STATUS_OK = "ok"
@@ -206,6 +207,22 @@ def step_data() -> dict:
         logger.warning("Fixture discovery skipped: %s", exc)
         fixture_status = {"status": "error", "errors": [str(exc)]}
 
+    # Provider telemetry is opt-in for scheduled/operations runs. Ordinary
+    # unit tests and local cycles do not write operational state unless asked.
+    if os.environ.get("LALIGA_FIXTURE_TELEMETRY", "0").strip() == "1":
+        try:
+            from src.data.fixture_coverage import ProviderTelemetry
+
+            ProviderTelemetry(PROVIDER_STATUS_PATH).record(
+                str(fixture_status.get("provider") or "unknown"),
+                str(fixture_status.get("status", "unknown")),
+                fetched=int(fixture_status.get("fetched", 0) or 0),
+                written=int(fixture_status.get("written", 0) or 0),
+                errors=fixture_status.get("errors", []),
+            )
+        except Exception as exc:  # noqa: BLE001 - telemetry is best effort
+            logger.warning("Could not record fixture provider telemetry: %s", exc)
+
     return {
         "rows": int(len(master)),
         "seasons_fetched": quality.get("seasons_fetched", []),
@@ -261,8 +278,40 @@ def step_reports() -> dict:
     return {"files": len(written)}
 
 
+def step_quality() -> dict:
+    """Audit historical data quality and write JSON/CSV/Markdown reports."""
+    from src.data.data_quality import audit_dataset, write_quality_reports
+
+    report, tables = audit_dataset()
+    paths = write_quality_reports(report, tables)
+    return {
+        "status": report["status"],
+        "errors": report["summary"]["errors"],
+        "warnings": report["summary"]["warnings"],
+        "reports": len(paths),
+    }
+
+
+def step_coverage() -> dict:
+    """Regenerate historical/upcoming fixture coverage reports."""
+    from src.data.fixture_coverage import audit_fixture_coverage, write_coverage_reports
+
+    report, coverage = audit_fixture_coverage()
+    paths = write_coverage_reports(report, coverage)
+    return {
+        "status": report["status"],
+        "upcoming_fixtures": report["upcoming"]["n"],
+        "warnings": len(report["warnings"]),
+        "reports": len(paths),
+    }
+
+
 def step_monitoring() -> dict:
     from src.monitoring.diagnostics import run_diagnostics, save_monitoring_report
+    from src.monitoring.prediction_monitor import (
+        monitor_predictions,
+        write_prediction_monitoring_report,
+    )
 
     raw = load_raw()
     history, _ = hist.load_history()
@@ -276,14 +325,21 @@ def step_monitoring() -> dict:
         feature_frame = None
     report = run_diagnostics(raw, history, metadata, feature_frame=feature_frame)
     save_monitoring_report(report)
+
+    prediction_report = monitor_predictions(history, raw=raw)
+    write_prediction_monitoring_report(prediction_report)
     return {
         "overall_status": report["overall_status"],
         "checks": {c["name"]: c["status"] for c in report["checks"]},
+        "prediction_monitoring": prediction_report["overall_status"],
+        "live_performance_reliable": prediction_report["live_performance_reliable"],
     }
 
 
 STEP_FUNCTIONS = {
     "data": step_data,
+    "quality": step_quality,
+    "coverage": step_coverage,
     "predict": step_predict,
     "backfill": step_backfill,
     "reports": step_reports,

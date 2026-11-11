@@ -1,0 +1,250 @@
+{
+  "generated_at": "2026-11-11T00:27:20+00:00",
+  "status": "warning",
+  "data_sources": {
+    "historical": "C:/Users/indor/laliga-predictor/data/raw/laliga_matches.csv",
+    "upcoming": "C:/Users/indor/laliga-predictor/data/raw/upcoming_fixtures.csv"
+  },
+  "historical": {
+    "rows": 1259,
+    "seasons": [
+      {
+        "season": "23/24",
+        "matches": 380,
+        "teams": 20,
+        "team_list": [
+          "Alaves",
+          "Almeria",
+          "Ath Bilbao",
+          "Ath Madrid",
+          "Barcelona",
+          "Betis",
+          "Cadiz",
+          "Celta",
+          "Getafe",
+          "Girona",
+          "Granada",
+          "Las Palmas",
+          "Mallorca",
+          "Osasuna",
+          "Real Madrid",
+          "Sevilla",
+          "Sociedad",
+          "Valencia",
+          "Vallecano",
+          "Villarreal"
+        ],
+        "date_min": "2023-08-11",
+        "date_max": "2024-05-26",
+        "unexpected_size": false
+      },
+      {
+        "season": "24/25",
+        "matches": 380,
+        "teams": 20,
+        "team_list": [
+          "Alaves",
+          "Ath Bilbao",
+          "Ath Madrid",
+          "Barcelona",
+          "Betis",
+          "Celta",
+          "Espanol",
+          "Getafe",
+          "Girona",
+          "Las Palmas",
+          "Leganes",
+          "Mallorca",
+          "Osasuna",
+          "Real Madrid",
+          "Sevilla",
+          "Sociedad",
+          "Valencia",
+          "Valladolid",
+          "Vallecano",
+          "Villarreal"
+        ],
+        "date_min": "2024-08-15",
+        "date_max": "2025-05-25",
+        "unexpected_size": false
+      },
+      {
+        "season": "25/26",
+        "matches": 380,
+        "teams": 20,
+        "team_list": [
+          "Alaves",
+          "Ath Bilbao",
+          "Ath Madrid",
+          "Barcelona",
+          "Betis",
+          "Celta",
+          "Elche",
+          "Espanol",
+          "Getafe",
+          "Girona",
+          "Levante",
+          "Mallorca",
+          "Osasuna",
+          "Oviedo",
+          "Real Madrid",
+          "Sevilla",
+          "Sociedad",
+          "Valencia",
+          "Vallecano",
+          "Villarreal"
+        ],
+        "date_min": "2025-08-15",
+        "date_max": "2026-05-24",
+        "unexpected_size": false
+      },
+      {
+        "season": "26/27",
+        "matches": 119,
+        "teams": 20,
+        "team_list": [
+          "Alaves",
+          "Ath Bilbao",
+          "Ath Madrid",
+          "Barcelona",
+          "Betis",
+          "Celta",
+          "Elche",
+          "Espanol",
+          "Getafe",
+          "La Coruna",
+          "Levante",
+          "Malaga",
+          "Osasuna",
+          "Real Madrid",
+          "Santander",
+          "Sevilla",
+          "Sociedad",
+          "Valencia",
+          "Vallecano",
+          "Villarreal"
+        ],
+        "date_min": "2026-08-15",
+        "date_max": "2026-11-08",
+        "unexpected_size": false
+      }
+    ],
+    "reference_season": "25/26",
+    "reference_teams": [
+      "Alaves",
+      "Ath Bilbao",
+      "Ath Madrid",
+      "Barcelona",
+      "Betis",
+      "Celta",
+      "Elche",
+      "Espanol",
+      "Getafe",
+      "Girona",
+      "Levante",
+      "Mallorca",
+      "Osasuna",
+      "Oviedo",
+      "Real Madrid",
+      "Sevilla",
+      "Sociedad",
+      "Valencia",
+      "Vallecano",
+      "Villarreal"
+    ],
+    "latest_season": "26/27",
+    "latest_season_teams": [
+      "Alaves",
+      "Ath Bilbao",
+      "Ath Madrid",
+      "Barcelona",
+      "Betis",
+      "Celta",
+      "Elche",
+      "Espanol",
+      "Getafe",
+      "La Coruna",
+      "Levante",
+      "Malaga",
+      "Osasuna",
+      "Real Madrid",
+      "Santander",
+      "Sevilla",
+      "Sociedad",
+      "Valencia",
+      "Vallecano",
+      "Villarreal"
+    ],
+    "missing_teams": [
+      "Girona",
+      "Mallorca",
+      "Oviedo"
+    ],
+    "promoted_teams": [
+      "La Coruna",
+      "Malaga",
+      "Santander"
+    ],
+    "dates": {
+      "min": "2023-08-11",
+      "max": "2026-11-08"
+    }
+  },
+  "upcoming": {
+    "n": 1,
+    "providers": [
+      "thesportsdb"
+    ],
+    "status_counts": {
+      "scheduled": 1
+    },
+    "teams_covered": 2,
+    "teams_without_fixtures": [
+      "Alaves",
+      "Ath Bilbao",
+      "Ath Madrid",
+      "Betis",
+      "Celta",
+      "Elche",
+      "Espanol",
+      "Getafe",
+      "La Coruna",
+      "Levante",
+      "Malaga",
+      "Osasuna",
+      "Real Madrid",
+      "Santander",
+      "Sevilla",
+      "Sociedad",
+      "Valencia",
+      "Vallecano"
+    ],
+    "missing_dates": 0,
+    "duplicate_fixture_ids": 0,
+    "conflicting_fixtures": 0,
+    "unresolved_scheduled": 1,
+    "oldest_fetched_at": "2026-11-10T23:55:50Z",
+    "newest_fetched_at": "2026-11-10T23:55:50Z",
+    "stale_snapshots": 0,
+    "schedule_completeness": "unknown_partial_provider_window",
+    "expected_fixtures": null
+  },
+  "provider_telemetry": {
+    "generated_at": null,
+    "providers": {},
+    "recent_attempts": [],
+    "path": "C:/Users/indor/laliga-predictor/data/processed/fixture_provider_status.json"
+  },
+  "thresholds": {
+    "full_season_matches": 340,
+    "stale_days": 14
+  },
+  "warnings": [
+    "No upcoming fixture was returned for: Alaves, Ath Bilbao, Ath Madrid, Betis, Celta, Elche, Espanol, Getafe, La Coruna, Levante, Malaga, Osasuna, Real Madrid, Santander, Sevilla, Sociedad, Valencia, Vallecano. The provider window may be incomplete; this is not proof that the fixtures do not exist.",
+    "Teams present in reference season 25/26 but absent from the latest season: Girona, Mallorca, Oviedo."
+  ],
+  "notes": [
+    "Provider next-event endpoints are partial windows; a missing fixture is reported as unknown, never fabricated.",
+    "A fixture ID is derived from canonical teams and the calendar date, so a kickoff-time change preserves identity."
+  ]
+}

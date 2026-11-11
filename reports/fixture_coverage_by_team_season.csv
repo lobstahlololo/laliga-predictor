@@ -1,0 +1,81 @@
+season,team,matches,upcoming_fixtures,has_upcoming_fixture
+23/24,Alaves,38,0,False
+23/24,Almeria,38,0,False
+23/24,Ath Bilbao,38,0,False
+23/24,Ath Madrid,38,0,False
+23/24,Barcelona,38,0,False
+23/24,Betis,38,0,False
+23/24,Cadiz,38,0,False
+23/24,Celta,38,0,False
+23/24,Getafe,38,0,False
+23/24,Girona,38,0,False
+23/24,Granada,38,0,False
+23/24,Las Palmas,38,0,False
+23/24,Mallorca,38,0,False
+23/24,Osasuna,38,0,False
+23/24,Real Madrid,38,0,False
+23/24,Sevilla,38,0,False
+23/24,Sociedad,38,0,False
+23/24,Valencia,38,0,False
+23/24,Vallecano,38,0,False
+23/24,Villarreal,38,0,False
+24/25,Alaves,38,0,False
+24/25,Ath Bilbao,38,0,False
+24/25,Ath Madrid,38,0,False
+24/25,Barcelona,38,0,False
+24/25,Betis,38,0,False
+24/25,Celta,38,0,False
+24/25,Espanol,38,0,False
+24/25,Getafe,38,0,False
+24/25,Girona,38,0,False
+24/25,Las Palmas,38,0,False
+24/25,Leganes,38,0,False
+24/25,Mallorca,38,0,False
+24/25,Osasuna,38,0,False
+24/25,Real Madrid,38,0,False
+24/25,Sevilla,38,0,False
+24/25,Sociedad,38,0,False
+24/25,Valencia,38,0,False
+24/25,Valladolid,38,0,False
+24/25,Vallecano,38,0,False
+24/25,Villarreal,38,0,False
+25/26,Alaves,38,0,False
+25/26,Ath Bilbao,38,0,False
+25/26,Ath Madrid,38,0,False
+25/26,Barcelona,38,0,False
+25/26,Betis,38,0,False
+25/26,Celta,38,0,False
+25/26,Elche,38,0,False
+25/26,Espanol,38,0,False
+25/26,Getafe,38,0,False
+25/26,Girona,38,0,False
+25/26,Levante,38,0,False
+25/26,Mallorca,38,0,False
+25/26,Osasuna,38,0,False
+25/26,Oviedo,38,0,False
+25/26,Real Madrid,38,0,False
+25/26,Sevilla,38,0,False
+25/26,Sociedad,38,0,False
+25/26,Valencia,38,0,False
+25/26,Vallecano,38,0,False
+25/26,Villarreal,38,0,False
+26/27,Alaves,12,0,False
+26/27,Ath Bilbao,11,0,False
+26/27,Ath Madrid,12,0,False
+26/27,Barcelona,12,1,True
+26/27,Betis,12,0,False
+26/27,Celta,12,0,False
+26/27,Elche,12,0,False
+26/27,Espanol,12,0,False
+26/27,Getafe,12,0,False
+26/27,La Coruna,12,0,False
+26/27,Levante,12,0,False
+26/27,Malaga,12,0,False
+26/27,Osasuna,12,0,False
+26/27,Real Madrid,12,0,False
+26/27,Santander,12,0,False
+26/27,Sevilla,12,0,False
+26/27,Sociedad,12,0,False
+26/27,Valencia,12,0,False
+26/27,Vallecano,11,0,False
+26/27,Villarreal,12,1,True

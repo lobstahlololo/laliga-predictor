@@ -62,6 +62,9 @@ def _api() -> int:
 STAGES = {
     "data": lambda: _run_module("src.data.make_dataset"),
     "fixtures": lambda: _run_module("src.data.fixture_provider"),
+    "quality": lambda: _run_module("src.data.data_quality"),
+    "coverage": lambda: _run_module("src.data.fixture_coverage"),
+    "sources": lambda: _run_module("src.data.historical_sources"),
     "features": lambda: _run_module("src.features.build_features"),
     "train": lambda: _run_module("src.models.train_model"),
     "predict": _predict,
@@ -70,6 +73,8 @@ STAGES = {
     "experiments": lambda: _run_module("src.experiments.runner"),
     "ablation": lambda: _run_module("src.experiments.feature_ablation"),
     "phase3": lambda: _run_module("src.experiments.phase3_runner"),
+    "evaluation": lambda: _run_module("src.evaluation.full_season"),
+    "monitor": lambda: _run_module("src.monitoring.prediction_monitor"),
     "update": lambda: _run_module("src.pipeline.automation"),
     "registry": lambda: _run_module("src.models.registry"),
     "api": _api,
@@ -79,7 +84,7 @@ STAGES = {
     ),
 }
 
-ORDER = ["data", "features", "train", "predict", "backfill", "reports"]
+ORDER = ["data", "quality", "coverage", "features", "train", "predict", "backfill", "reports"]
 
 
 def main(argv: list[str] | None = None) -> int:

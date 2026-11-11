@@ -1,0 +1,152 @@
+{
+  "generated_at": "2026-11-11T00:27:21+00:00",
+  "network_requests": 0,
+  "production_model_unchanged": true,
+  "seasons": [
+    "23/24",
+    "24/25",
+    "25/26",
+    "26/27"
+  ],
+  "source_candidates": [
+    {
+      "name": "Football-Data.co.uk SP1",
+      "kind": "results_and_odds",
+      "provider_type": "published CSV",
+      "historical": "Four cached La Liga season sheets (shots and Bet365 odds)",
+      "credentials": "none",
+      "redistribution": "public download",
+      "status": "available_local_extract",
+      "notes": "Provides results, shots and odds but not xG or player availability. It is the production results source, not an optional feature source.",
+      "documentation": "https://www.football-data.co.uk/spainm.php",
+      "local_path": ""
+    },
+    {
+      "name": "Understat",
+      "kind": "xg",
+      "provider_type": "community dataset / scrape",
+      "historical": "Team and player xG by match from 2014/15 onward",
+      "credentials": "none",
+      "redistribution": "no official API; respect site terms and rate limits",
+      "status": "not_configured",
+      "notes": "A plausible historical xG source, but no local timestamped extract is committed. Retrieval requires a scraper, availability timestamps are not published, and post-match xG must be lagged before kickoff. Do not treat it as configured until an extract with available_at exists.",
+      "documentation": "https://understat.com/",
+      "local_path": ""
+    },
+    {
+      "name": "FBref / StatsBomb data",
+      "kind": "xg",
+      "provider_type": "published tables / open datasets",
+      "historical": "Selected competitions and seasons; not a complete La Liga archive",
+      "credentials": "none for public pages",
+      "redistribution": "site terms; StatsBomb open data has its own licence",
+      "status": "not_configured",
+      "notes": "Coverage is incomplete for the cached seasons and access is not a stable API. Not integrated, so no coverage is claimed.",
+      "documentation": "https://fbref.com/",
+      "local_path": ""
+    },
+    {
+      "name": "API-Football (xG)",
+      "kind": "xg",
+      "provider_type": "commercial API",
+      "historical": "xG availability depends on plan/league; free tier has no reliable xG",
+      "credentials": "API key required",
+      "redistribution": "contract terms",
+      "status": "not_configured",
+      "notes": "The fixture-discovery integration only uses the fixtures endpoint. Historical xG on the free plan is not assumed; a paid plan and a verified extract would be required before enabling the xG group.",
+      "documentation": "https://www.api-football.com/documentation-v3",
+      "local_path": ""
+    },
+    {
+      "name": "API-Football (injuries/lineups)",
+      "kind": "player_availability",
+      "provider_type": "commercial API",
+      "historical": "Current injuries and lineups; historical snapshots require paid access",
+      "credentials": "API key required",
+      "redistribution": "contract terms",
+      "status": "not_configured",
+      "notes": "Availability must be timestamped before kickoff. The free plan and the fixture provider do not provide a historical availability archive.",
+      "documentation": "https://www.api-football.com/documentation-v3",
+      "local_path": ""
+    },
+    {
+      "name": "Transfermarkt",
+      "kind": "player_availability",
+      "provider_type": "community scrape",
+      "historical": "Injury histories, but publication timestamps are not an API field",
+      "credentials": "none",
+      "redistribution": "site terms; scraping restrictions apply",
+      "status": "not_configured",
+      "notes": "Without a reliable publication timestamp, using it would risk post-kickoff information leakage. Not integrated.",
+      "documentation": "https://www.transfermarkt.com/",
+      "local_path": ""
+    },
+    {
+      "name": "Local xG history extract",
+      "kind": "xg",
+      "provider_type": "repository CSV",
+      "historical": "Requires xg_history.csv with team/date/available_at",
+      "credentials": "none",
+      "redistribution": "depends on upstream source",
+      "status": "not_configured",
+      "notes": "Place a legitimate, timestamped extract at data/raw/xg_history.csv to enable the optional xG group. When absent, the group is unavailable.",
+      "documentation": "",
+      "local_path": "C:/Users/indor/laliga-predictor/data/raw/xg_history.csv",
+      "local_rows": 0,
+      "seasons_covered": []
+    },
+    {
+      "name": "Local player-availability extract",
+      "kind": "player_availability",
+      "provider_type": "repository CSV",
+      "historical": "Requires player_availability.csv with team/player/status/available_at",
+      "credentials": "none",
+      "redistribution": "depends on upstream source",
+      "status": "not_configured",
+      "notes": "Place a legitimate, timestamped extract at data/raw/player_availability.csv to enable the availability group. When absent, it is unavailable.",
+      "documentation": "",
+      "local_path": "C:/Users/indor/laliga-predictor/data/raw/player_availability.csv",
+      "local_rows": 0,
+      "seasons_covered": []
+    }
+  ],
+  "coverage": {
+    "xg": {
+      "available": false,
+      "rows": 0,
+      "seasons": [],
+      "teams": 0,
+      "matches_with_pre_kickoff_source": 0,
+      "mean_team_coverage_fraction": null
+    },
+    "player_availability": {
+      "available": false,
+      "rows": 0,
+      "seasons": [],
+      "teams": 0,
+      "matches_with_pre_kickoff_source": 0,
+      "mean_team_coverage_fraction": null
+    }
+  },
+  "findings": [
+    {
+      "kind": "xg",
+      "status": "unavailable",
+      "message": "No timestamped historical xG extract is present. The xG feature group is unavailable and the production model is unchanged."
+    },
+    {
+      "kind": "player_availability",
+      "status": "unavailable",
+      "message": "No timestamped player-availability extract is present. The availability feature group is unavailable and no values are fabricated."
+    }
+  ],
+  "local_paths": {
+    "xg": "C:/Users/indor/laliga-predictor/data/raw/xg_history.csv",
+    "player_availability": "C:/Users/indor/laliga-predictor/data/raw/player_availability.csv"
+  },
+  "notes": [
+    "A source is only 'available' when a local timestamped extract exists.",
+    "Coverage is measured from that extract; no external provider coverage is claimed.",
+    "Timestamps before kickoff are required; post-match xG is lagged by the loader."
+  ]
+}

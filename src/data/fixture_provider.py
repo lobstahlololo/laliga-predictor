@@ -217,6 +217,11 @@ class RateLimiter:
         self._calls.append(now)
 
 
+def successful_status(status: str) -> bool:
+    """Whether an attempt produced a usable provider response."""
+    return str(status).lower() in {"ok", "success", "fallback_empty", "partial"}
+
+
 def _request_json(
     url: str,
     *,
@@ -498,14 +503,19 @@ def merge_fixtures(
         )
 
     index_by_provider: dict[tuple[str, str], int] = {}
+    index_by_pairing: dict[tuple[str, str], list[int]] = {}
     for i, row in enumerate(rows):
         provider_id, fixture_id = row_key(row)
         if provider_id:
             index_by_provider[(str(row.get("provider", "")), provider_id)] = i
         if fixture_id:
             index_by_provider[("", fixture_id)] = i
+        index_by_pairing.setdefault(
+            (str(row.get("home_team", "")), str(row.get("away_team", ""))), []
+        ).append(i)
 
     seen_batch: set[tuple[str, str]] = set()
+    seen_fixture_provider: dict[tuple[str, str], str] = {}
     for record in incoming:
         if not isinstance(record, FixtureRecord):
             raise TypeError(f"incoming fixtures must be FixtureRecord, got {type(record)!r}")
@@ -523,24 +533,68 @@ def merge_fixtures(
             continue
         if provider_key[1] and provider_key in seen_batch:
             continue
-        if fixture_key in seen_batch:
+        if (
+            fixture_key in seen_batch
+            and seen_fixture_provider.get(fixture_key, row.get("provider", ""))
+            == row.get("provider", "")
+        ):
             continue
 
         target = index_by_provider.get(provider_key) if provider_key[1] else None
         if target is None:
-            target = index_by_provider.get(fixture_key)
+            fixture_target = index_by_provider.get(fixture_key)
+            if fixture_target is not None:
+                previous = rows[fixture_target]
+                previous_provider = str(previous.get("provider", "")).strip()
+                incoming_provider = str(row.get("provider", "")).strip()
+                previous_kickoff = str(previous.get("kickoff_utc", "")).strip()
+                incoming_kickoff = str(row.get("kickoff_utc", "")).strip()
+                # Two providers disagreeing on kickoff time is preserved as a
+                # conflict row for the audit rather than silently resolved.
+                if (
+                    previous_provider
+                    and incoming_provider
+                    and previous_provider != incoming_provider
+                    and previous_kickoff
+                    and incoming_kickoff
+                    and previous_kickoff != incoming_kickoff
+                ):
+                    target = None
+                else:
+                    target = fixture_target
+            elif not str(row.get("kickoff_utc", "")).strip():
+                # An incomplete payload with no date can still be the same
+                # fixture. Match by pairing only when unambiguous.
+                candidates = index_by_pairing.get(
+                    (row["home_team"], row["away_team"]), []
+                )
+                if len(candidates) == 1:
+                    target = candidates[0]
         if target is not None:
-            # Preserve a stable fixture ID across a time-only kickoff move.
+            # Preserve a stable fixture ID across a time-only kickoff move, and
+            # never let a provider with an incomplete payload erase a known
+            # kickoff that another provider already supplied.
             previous = rows[target]
+            if not str(row.get("kickoff_utc", "")).strip() and str(
+                previous.get("kickoff_utc", "")
+            ).strip():
+                row["kickoff_utc"] = previous["kickoff_utc"]
+                row["match_date"] = previous.get("match_date", "")
+            if str(previous.get("fixture_id", "")).strip():
+                row["fixture_id"] = previous["fixture_id"]
             rows[target] = row
         else:
             rows.append(row)
             target = len(rows) - 1
+            index_by_pairing.setdefault(
+                (row["home_team"], row["away_team"]), []
+            ).append(target)
         if provider_key[1]:
             index_by_provider[provider_key] = target
             seen_batch.add(provider_key)
         index_by_provider[fixture_key] = target
         seen_batch.add(fixture_key)
+        seen_fixture_provider[fixture_key] = str(row.get("provider", ""))
 
     frame = pd.DataFrame(rows)
     for column in FIXTURE_COLUMNS:
@@ -551,6 +605,31 @@ def merge_fixtures(
     frame["_sort"] = pd.to_datetime(frame["kickoff_utc"], errors="coerce", utc=True)
     frame = frame.sort_values(["_sort", "fixture_id"], na_position="last").drop(columns="_sort")
     return frame.reset_index(drop=True)
+
+
+def merge_provider_batches(
+    existing: pd.DataFrame,
+    batches: dict[str, list[FixtureRecord]],
+    *,
+    fetched_at: str | None = None,
+) -> pd.DataFrame:
+    """Safely merge batches from several providers into one fixture store.
+
+    Identity order is: provider event ID (same provider), then the stable
+    fixture ID (canonical teams + date). Conflicting kickoff times are kept as
+    separate rows rather than silently deleted, so the coverage audit can
+    report them. A fixture the providers no longer return is preserved.
+    """
+    combined: list[FixtureRecord] = []
+    for provider, records in batches.items():
+        for record in records or []:
+            if not isinstance(record, FixtureRecord):
+                raise TypeError(
+                    f"{provider} batch must contain FixtureRecord rows, "
+                    f"got {type(record)!r}"
+                )
+            combined.append(record)
+    return merge_fixtures(existing, combined, fetched_at=fetched_at)
 
 
 def write_fixtures_atomic(rows: pd.DataFrame, path: Path = UPCOMING_FIXTURES_PATH) -> Path:
@@ -572,6 +651,7 @@ class FixtureDiscoveryResult:
     kept: int = 0
     errors: list[str] = field(default_factory=list)
     path: str = str(UPCOMING_FIXTURES_PATH)
+    failed_providers: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -581,15 +661,24 @@ def refresh_upcoming_fixtures(
     path: Path = UPCOMING_FIXTURES_PATH,
     *,
     provider: FixtureProvider | None = None,
+    providers: list[FixtureProvider] | None = None,
     strict: bool = False,
+    status_path: Path | None = None,
 ) -> FixtureDiscoveryResult:
     """Fetch, merge and atomically persist upcoming fixtures.
 
-    Provider/network failures are reported as ``status="fallback"`` and the
-    stored fixture file is left untouched. ``strict=True`` re-raises instead.
+    One provider or several can be supplied. With several providers, a failing
+    provider does not discard another provider's successful batch; the result
+    is ``status="partial"`` and the stored fixtures are merged safely. If every
+    provider fails, the stored file is left untouched and the result is
+    ``status="fallback"``. ``strict=True`` re-raises instead.
+
+    When ``status_path`` is supplied, each attempt is recorded for provider
+    freshness/failure telemetry (never a secret, never an API key).
     """
     existing = load_fixture_rows(path)
-    if provider is None:
+    provider_list = list(providers or ([] if provider is None else [provider]))
+    if providers is None and provider is None:
         try:
             provider = provider_from_environment()
         except Exception as exc:  # noqa: BLE001 - disabled/misconfigured provider
@@ -604,39 +693,68 @@ def refresh_upcoming_fixtures(
                 raise
             logger.warning("Fixture discovery unavailable: %s", exc)
             return result
-    if provider is None:
+    if provider is None and not provider_list:
         return FixtureDiscoveryResult(
             status="disabled", kept=len(existing), path=str(path)
         )
+    if not provider_list:
+        provider_list = [provider]
 
-    try:
-        incoming = provider.fetch_upcoming()
-    except Exception as exc:  # noqa: BLE001 - fallback to stored fixtures
-        logger.warning("Fixture provider %s failed: %s", getattr(provider, "name", "?"), exc)
+    batches: dict[str, list[FixtureRecord]] = {}
+    errors: list[str] = []
+    failed: list[str] = []
+    for current in provider_list:
+        name = str(getattr(current, "name", "unknown"))
+        try:
+            batches[name] = current.fetch_upcoming()
+        except Exception as exc:  # noqa: BLE001 - other providers may still work
+            logger.warning("Fixture provider %s failed: %s", name, exc)
+            errors.append(f"{name}: {exc}")
+            failed.append(name)
+            if status_path is not None:
+                from src.data.fixture_coverage import ProviderTelemetry
+
+                ProviderTelemetry(Path(status_path)).record(
+                    name, "failed", errors=[str(exc)]
+                )
+        else:
+            if status_path is not None:
+                from src.data.fixture_coverage import ProviderTelemetry
+
+                ProviderTelemetry(Path(status_path)).record(
+                    name, "ok", fetched=len(batches[name]), written=0
+                )
+
+    if not batches:
         result = FixtureDiscoveryResult(
             status="fallback",
-            provider=getattr(provider, "name", ""),
+            provider=",".join(failed),
             kept=len(existing),
-            errors=[str(exc)],
+            errors=errors or ["all fixture providers failed"],
             path=str(path),
+            failed_providers=failed,
         )
-        if strict:
-            raise
+        if strict and errors:
+            raise FixtureProviderError("; ".join(errors))
         return result
 
+    incoming = [record for records in batches.values() for record in records]
     merged = merge_fixtures(existing, incoming)
     write_fixtures_atomic(merged, path)
+    status = "ok" if not failed else "partial"
     logger.info(
         "Fixtures refreshed from %s: %d fetched, %d stored (%d kept from before).",
-        provider.name, len(incoming), len(merged), len(existing),
+        ", ".join(batches), len(incoming), len(merged), len(existing),
     )
     return FixtureDiscoveryResult(
-        status="ok",
-        provider=provider.name,
+        status=status,
+        provider=",".join(batches),
         fetched=len(incoming),
         written=len(merged),
         kept=len(existing),
+        errors=errors,
         path=str(path),
+        failed_providers=failed,
     )
 
 
@@ -647,7 +765,9 @@ def main() -> int:
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    result = refresh_upcoming_fixtures()
+    from src.utils.config import PROVIDER_STATUS_PATH
+
+    result = refresh_upcoming_fixtures(status_path=PROVIDER_STATUS_PATH)
     print(json.dumps(result.as_dict(), indent=2))
     if result.status == "ok":
         return 0

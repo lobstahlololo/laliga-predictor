@@ -70,6 +70,14 @@ always, historical frequencies, market odds and multinomial logistic regression)
 - Runs an idempotent update cycle (data refresh → predictions → reconciliation →
   reports → monitoring) with retries, file logging, validation and optional
   webhook alerts for failures.
+- Audits historical data quality by column and season, and audits fixture
+  coverage/provider freshness without inventing missing fixtures.
+- Compares Random Forest, XGBoost, Elo, Poisson/Dixon-Coles, ensembles and the
+  market on a chronological full season with bootstrap intervals and
+  sample-size-gated breakdowns.
+- Monitors prediction counts, missing predictions, calibration, drift and data
+  freshness, and refuses to present live metrics as conclusions until enough
+  matches are settled.
 - Exposes a FastAPI service for fixtures, single-match predictions, team
   statistics, performance and registry status, using the same prediction engine
   as the CLI and dashboard.
@@ -98,6 +106,8 @@ These are the rules the code enforces:
 | Market benchmark | Raw `1 / odds` probabilities are explicitly row-normalised to remove overround before every comparison. |
 | Append-only history | Prediction rows are never overwritten; a new timestamp/version appends a snapshot. Results fill blank fields only. |
 | Evidence-gated promotion | The registry promotes only when validation log-loss is strictly better and validation Brier is not worse; test metrics are recorded but never decide a promotion. |
+| Fixture integrity | Merging never deletes a stored fixture because a provider returned a partial window; conflicting kickoffs are reported, not silently resolved. |
+| Coverage is measured | A provider "next events" window is reported as unknown completeness, never as a complete league schedule. |
 
 ---
 
@@ -141,7 +151,11 @@ laliga-predictor/
 ├── src/
 │   ├── data/
 │   │   ├── make_dataset.py       # fetch, merge, validate, atomic write
-│   │   └── validation.py         # schema, dedupe, team normalization, quality
+│   │   ├── validation.py         # schema, dedupe, team normalization, quality
+│   │   ├── fixture_provider.py    # TheSportsDB/API-Football discovery + safe merge
+│   │   ├── fixture_coverage.py    # coverage, conflicts, provider telemetry
+│   │   ├── data_quality.py        # column/season quality audit + reports
+│   │   └── historical_sources.py  # xG/availability source audit (no network)
 │   ├── features/
 │   │   ├── build_features.py     # rolling features + model frame + artifacts
 │   │   └── preprocessing.py      # train-only median imputation + scaling
@@ -162,6 +176,7 @@ laliga-predictor/
 │   │   ├── uncertainty.py        # confidence/entropy/agreement/reliability
 │   │   ├── phase2_plots.py       # baseline/experiment/importance/calibration plots
 │   │   ├── phase3_plots.py       # Elo/Poisson/ensemble/market/uncertainty plots
+│   │   ├── full_season.py        # Phase 6 full-season comparison + intervals
 │   │   └── plots.py              # confusion/calibration/comparison charts
 │   ├── experiments/
 │   │   ├── tracking.py           # JSON records + index.csv
@@ -170,7 +185,8 @@ laliga-predictor/
 │   ├── pipeline/
 │   │   └── automation.py         # idempotent update cycle, retries, alerts
 │   ├── monitoring/
-│   │   └── diagnostics.py        # drift, distribution, calibration, performance
+│   │   ├── diagnostics.py        # drift, distribution, calibration, performance
+│   │   └── prediction_monitor.py # Phase 6 counts, drift, freshness, coverage
 │   ├── predictions/
 │   │   ├── predictor.py          # shared inference engine
 │   │   ├── fixtures.py           # fixtures.txt / upcoming_fixtures.csv parser
@@ -269,7 +285,12 @@ python main.py backfill   # reconcile results + reports + audit
 python main.py reports    # ledger CSV/Markdown reports
 python main.py experiments # baselines, features, calibration, SHAP, monitoring
 python main.py phase3     # Elo, Poisson/Dixon-Coles, ensembles, market, uncertainty
-python main.py update     # idempotent cycle: data, predict, backfill, reports, monitoring
+python main.py quality    # data-quality audit (JSON/CSV/Markdown)
+python main.py coverage   # fixture coverage + provider telemetry
+python main.py sources    # historical xG/availability source audit
+python main.py evaluation # full-season out-of-sample comparison with intervals
+python main.py monitor    # live prediction monitoring report
+python main.py update     # idempotent cycle: data, quality, coverage, predict, backfill, reports, monitoring
 python main.py registry   # production registry status
 python -m src.models.registry register   # register/promote/rollback/verify
 python main.py api        # launch the FastAPI service
@@ -306,6 +327,11 @@ powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -SkipPrediction
 | `python -m src.predictions.reports` | Regenerates ledger performance CSV/Markdown reports. |
 | `python -m src.experiments.runner` | Baselines, feature ablations, calibration, explainability, experiment records and monitoring report. |
 | `python -m src.experiments.phase3_runner` | Dynamic Elo, Poisson/Dixon-Coles, validation-selected ensembles, market diagnostics, uncertainty and the Phase 3 report. |
+| `python -m src.data.data_quality` | Column/season missingness, duplicates, team-name and score/date validity, chronology, season sizes, odds and feature coverage. Writes JSON/CSV/Markdown. |
+| `python -m src.data.fixture_coverage` | Team/season and upcoming coverage, duplicate/conflicting fixtures, provider freshness/failures. Never claims a partial provider window is complete. |
+| `python -m src.data.historical_sources` | Audits xG/availability candidates with zero network requests and measures only a local timestamped extract. |
+| `python -m src.evaluation.full_season` | Chronological comparison of RF, XGBoost, Elo, Poisson/Dixon-Coles, ensembles and market with bootstrap intervals and gated breakdowns. |
+| `python -m src.monitoring.prediction_monitor` | Live counts, missing predictions, invalid probabilities, overdue settlements, calibration, drift, freshness and coverage with sample-size guards. |
 | `python -m src.pipeline.automation` | One idempotent update cycle: refresh data, predict configured fixtures, reconcile results, regenerate reports and monitoring. Retries, logs to `logs/pipeline.log` and appends `reports/pipeline_runs.jsonl`. |
 | `python -m src.models.registry` | `status`, `list`, `register`, `promote <version> --reason`, `rollback --reason`, `verify` against `models/registry/registry.json`. |
 | `uvicorn src.api.main:app` | FastAPI service; OpenAPI docs at `/docs`. |
@@ -321,8 +347,11 @@ powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -SkipPrediction
 - Football-Data.co.uk `SP1` (La Liga) season sheets.
 - Direct download first, with an optional `r.jina.ai` text-mirror fallback for
   networks that block the host.
-- Current cached data: **1,249 matches**, 2023-08-11 → 2026-11-02, seasons
-  `23/24`, `24/25`, `25/26` (380 each) and `26/27` (109 in progress).
+- Current cached data: **1,259 matches**, 2023-08-11 → 2026-11-08, seasons
+  `23/24`, `24/25`, `25/26` (380 each) and `26/27` (119 in progress).
+- The Phase 1–3 result tables below were measured on the earlier 1,249/109
+  snapshot and are retained as historical results; the Phase 6 comparison uses
+  the current 1,259/119 snapshot.
 
 ### Cleaning rules
 
@@ -600,6 +629,58 @@ test, so they are the strongest candidates for a controlled review, but they
 still trail market odds. The Phase 3 run is explicit (`python main.py phase3`)
 and writes a separate experiment record for every new model.
 
+### Phase 6: data quality, coverage and full-season evaluation
+
+Phase 6 adds no model architecture. It measures the data and the existing
+models more strictly, and it separates validation, test and live performance.
+
+**Data quality.** The current 1,259-match cache has 0 duplicate fixtures, 0
+invalid scores/dates, 0 score/result contradictions and 0 missing odds. All 19
+features are present for **98.57%** of rows; the largest per-feature missing
+fraction is **1.19%** (early-season form warm-up), below the 5% threshold.
+Reports: `reports/data_quality.json`, `reports/data_quality_by_column.csv`,
+`reports/data_quality_by_season.csv`, `reports/data_quality.md`.
+
+**Fixture coverage.** TheSportsDB currently returns only **1** upcoming fixture
+covering 2 of 20 teams. The audit records that as an incomplete provider
+window (`unknown_partial_provider_window`), not a complete schedule, and does
+not fabricate the other fixtures. There are no duplicate IDs or conflicting
+kickoffs in the current store. The reference season `25/26` contains Girona,
+Mallorca and Oviedo; `26/27` contains La Coruna, Malaga and Santander, a real
+promotion/relegation change. Reports: `reports/fixture_coverage.json`,
+`reports/fixture_coverage.md`. Provider freshness/failure telemetry is written
+to `data/processed/fixture_provider_status.json` for scheduled runs.
+
+**Historical xG and player availability.** No timestamped local extract exists,
+so both groups are reported as **unavailable**; no values are simulated and no
+model uses them. The source audit made zero network requests. See
+[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md).
+
+**Full-season evaluation (`26/27`, 119 matches).** The full measured report is
+in [`docs/MODEL_EVALUATION.md`](docs/MODEL_EVALUATION.md) and
+`reports/full_season_evaluation.md`.
+
+| Model | Validation log-loss | Test log-loss | Test 95% CI | Test Brier | Test accuracy | Test draw recall |
+|---|---:|---:|---|---:|---:|---:|
+| Market odds | **0.9637** | **0.9171** | 0.8379–1.0008 | **0.5405** | **56.3%** | 0.0% |
+| Dynamic Elo | 0.9803 | 0.9255 | 0.8524–1.0023 | 0.5440 | 54.6% | 0.0% |
+| Ensemble (validation weights) | **0.9760** | 0.9257 | 0.8503–1.0054 | 0.5443 | 55.5% | 0.0% |
+| Random Forest (production) | 1.0134 | 0.9624 | 0.8834–1.0512 | 0.5672 | 53.8% | 58.1% |
+| XGBoost | 1.0559 | 1.0036 | 0.8853–1.1354 | 0.5868 | 53.8% | 32.3% |
+
+Validation selected the ensemble with weights Random Forest 0.00, XGBoost 0.20,
+Dynamic Elo 0.70 and Independent Poisson 0.10 (validation log-loss 0.9760 vs
+0.9826 for equal weights). No learned model beats market odds on test log-loss,
+and the intervals overlap. The production model and registry snapshot are
+unchanged; no challenger is promoted. Walk-forward excludes the final test
+season.
+
+**Live monitoring.** The ledger currently has 17 prediction rows over 3 unique
+fixtures and **0 settled** rows. Live calibration/log-loss/Brier are therefore
+reported as `insufficient_data` with `live_performance_reliable=false`; no live
+conclusion is presented. Reports: `reports/prediction_monitoring.json` and
+`reports/prediction_monitoring.md`.
+
 ---
 
 ## 11. Generating predictions
@@ -773,7 +854,7 @@ this environment, and no deployment success is claimed.
 python -m pytest
 ```
 
-Current result: **97 passed**.
+Current result: **168 passed**.
 
 Coverage includes:
 
@@ -803,6 +884,11 @@ Coverage includes:
 - Engine expected goals, scoreline normalization, uncertainty fields and reproducibility.
 - FastAPI health/model/predict/teams/performance/registry endpoints and error codes.
 - Streamlit smoke tests for Home, Match Predictions and Model Operations.
+- Data-quality anomaly detection, configurable thresholds and strict JSON/CSV/Markdown reports.
+- Fixture coverage, duplicate/conflict detection, partial-provider preservation, stable IDs and provider telemetry.
+- Historical xG/availability source audit with time-aware coverage and no network requests.
+- Full-season evaluation protocol, bootstrap intervals, walk-forward exclusion of the final test season and small-sample breakdown refusal.
+- Prediction monitoring counts, missing predictions, invalid probabilities and explicit insufficient-sample states.
 
 Tests use a deterministic synthetic four-season dataset, so they require no
 network access and do not modify the real ledger.
@@ -884,6 +970,18 @@ generations.
   every `main.py all` run.
 - **Windows-first orchestration.** `run_pipeline.ps1` is PowerShell; the Python
   commands are cross-platform.
+- **Provider fixture coverage is currently insufficient.** TheSportsDB returned
+  only one upcoming fixture covering two teams. The audit reports the window as
+  incomplete and does not fabricate the remaining schedule.
+- **No historical xG or player availability.** No timestamped local extract
+  exists; both optional feature groups are unavailable and untrained.
+- **Live performance is unmeasured.** The ledger has 0 settled predictions, so
+  live metrics are explicitly `insufficient_data`, not evidence.
+- **Linux CI is configured, not executed here.** `ci.yml` runs on Ubuntu and
+  Windows, but this Windows environment cannot execute GitHub Actions; no Linux
+  pass is claimed.
+- **Phase 1–3 tables use an earlier data snapshot.** They were measured on
+  1,249 matches with 109 test rows; the Phase 6 evaluation uses 1,259/119.
 
 ---
 
@@ -895,7 +993,7 @@ generations.
 3. Decide whether calibrated probabilities or draw recall matter more for the
    product, then either deploy a constrained calibrator or keep the raw model.
 4. Use nested walk-forward evaluation for hyperparameters as well as models.
-5. Add CI (GitHub Actions) running pytest and a smoke training job.
+5. Run and extend the configured GitHub Actions CI (Ubuntu + Windows), including the registry-integrity check on scheduled updates.
 6. Add a scheduler/container for periodic data refresh and retraining.
 7. Revisit feature candidates when a reliable xG source is available, using the
    same validation + walk-forward + bootstrap rule.
