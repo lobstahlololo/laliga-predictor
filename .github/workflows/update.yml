@@ -58,9 +58,9 @@ jobs:
       - name: Ensure scheduled update did not overwrite registry snapshots
         if: always()
         run: |
-          if [ -n "$(git status --porcelain models/registry)" ]; then
-            echo "Registry artifacts changed during a scheduled update:"
-            git status --porcelain models/registry
+          if [ -n "$(git status --porcelain models/registry models/saved_models)" ]; then
+            echo "Production artifacts changed during a scheduled update:"
+            git status --porcelain models/registry models/saved_models
             exit 1
           fi
 

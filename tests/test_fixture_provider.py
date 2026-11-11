@@ -225,6 +225,9 @@ def test_discovery_can_be_disabled(tmp_path, monkeypatch):
 
 
 def test_unknown_provider_is_reported_without_network(tmp_path, monkeypatch):
+    # Discovery must be enabled for the provider name to be validated at all;
+    # CI sets LALIGA_FIXTURE_DISCOVERY=0 globally, so set it explicitly here.
+    monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "1")
     monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, "not-a-provider")
     result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
     assert result.status in {"disabled", "error"}

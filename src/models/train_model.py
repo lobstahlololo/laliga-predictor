@@ -298,8 +298,14 @@ def train_and_select(
         )
 
     validation_table = compare_models(validation_results)
-    EVAL_DIR.mkdir(parents=True, exist_ok=True)
-    validation_table.to_csv(EVAL_DIR / "validation_model_comparison.csv", index=False)
+    if save:
+        # ``save=False`` must not write anything: the test suite trains on a
+        # synthetic frame and would otherwise overwrite the committed
+        # evaluation artifacts in ``models/evaluation``.
+        EVAL_DIR.mkdir(parents=True, exist_ok=True)
+        validation_table.to_csv(
+            EVAL_DIR / "validation_model_comparison.csv", index=False
+        )
 
     # Selection happens HERE, on validation data only.
     ordered = sorted(

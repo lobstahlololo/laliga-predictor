@@ -758,7 +758,15 @@ def write_quality_reports(
     json_path.write_text(
         json.dumps(report, indent=2, allow_nan=False, default=str), encoding="utf-8"
     )
-    tables.get("by_column", pd.DataFrame()).to_csv(columns_path, index=False)
+    by_column = tables.get("by_column", pd.DataFrame())
+    if by_column.empty:
+        # A fresh clone has no cached dataset, so there is no missing-value
+        # table. Keep the documented columns so the CSV has a stable header and
+        # the Markdown sort below cannot fail on a missing column.
+        by_column = pd.DataFrame(
+            columns=["column", "rows", "missing", "missing_fraction"]
+        )
+    by_column.to_csv(columns_path, index=False)
     tables.get("by_season", pd.DataFrame()).to_csv(seasons_path, index=False)
 
     findings = pd.DataFrame(report.get("findings", []))
@@ -816,9 +824,7 @@ def write_quality_reports(
         "## Missing values by column",
         "",
         _markdown_table(
-            tables.get("by_column", pd.DataFrame()).sort_values(
-                "missing_fraction", ascending=False
-            ),
+            by_column.sort_values("missing_fraction", ascending=False),
             ["column", "missing", "missing_fraction"],
             max_rows=40,
         ),

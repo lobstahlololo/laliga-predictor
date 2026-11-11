@@ -42,11 +42,74 @@ jobs:
       - name: Byte-compile sources
         run: python -m compileall -q src dashboard tests main.py predict_upcoming.py backfill_results.py
 
+      - name: Production registry and artifacts pristine before the suite
+        run: |
+          python -m src.models.registry verify
+          changed="$(git status --porcelain models/registry models/saved_models)"
+          if [ -n "$changed" ]; then
+            echo "Checked-out production artifacts are not pristine:"
+            echo "$changed"
+            exit 1
+          fi
+
       - name: Run full test suite
         run: python -m pytest
 
-      - name: Verify model registry artifacts
-        run: python -m src.models.registry verify
+      - name: Test suite left registry snapshots and production artifacts untouched
+        if: always()
+        run: |
+          changed="$(git status --porcelain models/registry models/saved_models)"
+          if [ -n "$changed" ]; then
+            echo "The test suite modified production artifacts or registry snapshots:"
+            echo "$changed"
+            exit 1
+          fi
+          python -m src.models.registry verify
+
+  operational:
+    name: operational (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Deliberately anonymous: historical results come from the public
+      # Football-Data.co.uk CSVs and fixture discovery stays off, so this job
+      # proves the platform works without any external API credentials.
+      LALIGA_FOOTBALL_API_KEY: ""
+      LALIGA_FIXTURE_DISCOVERY: "0"
+      LALIGA_FIXTURE_TELEMETRY: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies from requirements (clean environment)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Production registry and artifacts pristine before operational steps
+        run: |
+          python -m src.models.registry verify
+          changed="$(git status --porcelain models/registry models/saved_models)"
+          if [ -n "$changed" ]; then
+            echo "Checked-out production artifacts are not pristine:"
+            echo "$changed"
+            exit 1
+          fi
+
+      - name: Refresh the historical dataset without credentials
+        run: python -m src.data.make_dataset
 
       - name: Data-quality audit
         run: python -m src.data.data_quality
@@ -58,11 +121,9 @@ jobs:
         run: python -m src.data.historical_sources
 
       - name: Full-season evaluation (no artifact writes)
-        if: runner.os == 'Linux'
         run: python -m src.evaluation.full_season --bootstrap 100 --no-save
 
       - name: Optional Redis backend degrades without a live server
-        if: runner.os == 'Linux'
         env:
           LALIGA_CACHE_BACKEND: redis
           LALIGA_REDIS_URL: redis://127.0.0.1:6399/0
@@ -75,12 +136,16 @@ jobs:
           print("cache backend after unavailable Redis:", cache.backend)
           PY
 
-      - name: Pipeline smoke without credentials and registry integrity
-        if: runner.os == 'Linux'
+      - name: Pipeline smoke without credentials
+        run: python -m src.pipeline.automation --steps reports,monitoring --no-notify
+
+      - name: Operational steps left registry snapshots and production artifacts untouched
+        if: always()
         run: |
-          python -m src.pipeline.automation --steps reports,monitoring --no-notify
-          if [ -n "$(git status --porcelain models/registry)" ]; then
-            echo "Operational pipeline modified production registry artifacts:"
-            git status --porcelain models/registry
+          changed="$(git status --porcelain models/registry models/saved_models)"
+          if [ -n "$changed" ]; then
+            echo "Operational commands modified production artifacts or registry snapshots:"
+            echo "$changed"
             exit 1
           fi
+          python -m src.models.registry verify
