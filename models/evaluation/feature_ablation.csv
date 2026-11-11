@@ -1,0 +1,4 @@
+group,status,n_features,n_train,n_validation,accuracy,log_loss,brier_score,macro_f1,delta_log_loss_vs_baseline,delta_brier_vs_baseline,reason
+baseline_19_features,evaluated,19,760,380,0.45789473684210524,1.0134453430820416,0.6028748273917701,0.45005930005618994,0.0,0.0,
+xg,unavailable,0,0,0,,,,,,,no timestamped xG history at data/raw/xg_history.csv
+player_availability,unavailable,0,0,0,,,,,,,no timestamped player-availability data at data/raw/player_availability.csv

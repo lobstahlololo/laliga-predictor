@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-11-10T23:57:53+00:00",
+  "selection_split": "train=['23/24', '24/25'], validation=25/26",
+  "test_season_used": false,
+  "baseline": {
+    "group": "baseline_19_features",
+    "status": "evaluated",
+    "n_features": 19,
+    "n_train": 760,
+    "n_validation": 380,
+    "accuracy": 0.45789473684210524,
+    "log_loss": 1.0134453430820416,
+    "brier_score": 0.6028748273917701,
+    "macro_f1": 0.45005930005618994,
+    "delta_log_loss_vs_baseline": 0.0,
+    "delta_brier_vs_baseline": 0.0,
+    "reason": ""
+  },
+  "groups": {
+    "xg": {
+      "group": "xg",
+      "available": false,
+      "reason": "no timestamped xG history at data/raw/xg_history.csv",
+      "source_rows": 0,
+      "feature_count": 8,
+      "columns": [
+        "home_xg_for_5",
+        "home_xg_against_5",
+        "home_xg_diff_5",
+        "away_xg_for_5",
+        "away_xg_against_5",
+        "away_xg_diff_5",
+        "home_xg_observations",
+        "away_xg_observations"
+      ]
+    },
+    "player_availability": {
+      "group": "player_availability",
+      "available": false,
+      "reason": "no timestamped player-availability data at data/raw/player_availability.csv",
+      "source_rows": 0,
+      "feature_count": 7,
+      "columns": [
+        "home_availability_score",
+        "away_availability_score",
+        "home_missing_starters",
+        "away_missing_starters",
+        "availability_diff",
+        "home_availability_known",
+        "away_availability_known"
+      ]
+    }
+  },
+  "retained_groups": [],
+  "decision": "keep baseline only",
+  "min_log_loss_gain": 0.002,
+  "max_brier_regression": 0.002,
+  "production_model_unchanged": true
+}

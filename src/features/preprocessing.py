@@ -32,6 +32,17 @@ class FeaturePreprocessor:
     medians: dict[str, float] = field(default_factory=dict)
     scaler: StandardScaler = field(default_factory=StandardScaler)
     fitted: bool = False
+    # Provenance for optional feature groups. Empty means the 19-feature
+    # baseline; old pickled preprocessors simply lack the attribute.
+    feature_groups: list[str] = field(default_factory=list)
+
+    def describe(self) -> dict:
+        """Summary used by reports/tests; safe for legacy pickles."""
+        return {
+            "feature_count": len(self.feature_names),
+            "feature_groups": list(getattr(self, "feature_groups", []) or ["baseline"]),
+            "fitted": bool(self.fitted),
+        }
 
     def _prepare(self, X: pd.DataFrame) -> pd.DataFrame:
         missing = [c for c in self.feature_names if c not in X.columns]

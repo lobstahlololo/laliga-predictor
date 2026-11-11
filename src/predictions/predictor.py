@@ -16,6 +16,7 @@ from src.features.build_features import build_team_history, rest_days_as_of, sho
 from src.features.preprocessing import DEFAULT_PREPROCESSOR_PATH, FeaturePreprocessor
 from src.models.poisson import PoissonConfig, PoissonModel
 from src.utils.config import (
+    AVAILABILITY_FEATURE_COLUMNS,
     BEST_MODEL_PATH,
     FEATURE_COLUMNS,
     MODEL_METADATA_PATH,
@@ -24,6 +25,7 @@ from src.utils.config import (
     ROLLING_WINDOW,
     SHORT_WINDOW,
     VALUE_BET_THRESHOLD,
+    XG_FEATURE_COLUMNS,
 )
 from src.utils.teams import TeamNotFoundError, canonical_team, resolve_team
 
@@ -145,17 +147,24 @@ def value_bet_outcomes(
     return hits
 
 
+OPTIONAL_FEATURE_COLUMNS = list(XG_FEATURE_COLUMNS) + list(AVAILABILITY_FEATURE_COLUMNS)
+
+
 def build_feature_row(
     home_form: dict[str, float],
     away_form: dict[str, float],
     market: dict[str, float],
     headers: list[str],
     short_rest: int = 0,
+    extras: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Assemble one feature row in the exact preprocessing column order."""
+    extras = extras or {}
     row: dict[str, float] = {}
     for col in headers:
-        if col == "home_advantage":
+        if col in extras:
+            row[col] = float(extras[col])
+        elif col == "home_advantage":
             row[col] = 1.0
         elif col == "short_rest_advantage":
             row[col] = float(short_rest)
@@ -371,11 +380,41 @@ def predict_fixtures(
     timestamp = predicted_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     headers = list(preprocessor.feature_names)
-    if headers != FEATURE_COLUMNS:
+    missing_baseline = [c for c in FEATURE_COLUMNS if c not in headers]
+    unknown_features = [
+        c for c in headers
+        if c not in FEATURE_COLUMNS and c not in OPTIONAL_FEATURE_COLUMNS
+    ]
+    if missing_baseline or unknown_features:
         raise ArtifactError(
-            "Preprocessor feature order does not match FEATURE_COLUMNS. "
+            "Preprocessor features do not match the supported contract "
+            f"(missing={missing_baseline}, unknown={unknown_features}). "
             "Retrain the model."
         )
+
+    optional_columns = [c for c in headers if c not in FEATURE_COLUMNS]
+    xg_source = availability_source = None
+    if set(optional_columns) & set(XG_FEATURE_COLUMNS):
+        from src.features.optional_features import load_xg_history
+
+        xg_source = load_xg_history()
+        if xg_source.empty:
+            raise ArtifactError(
+                "This model expects xG features but no timestamped xG history "
+                "is available. Supply data/raw/xg_history.csv or retrain on the "
+                "baseline feature set."
+            )
+    if set(optional_columns) & set(AVAILABILITY_FEATURE_COLUMNS):
+        from src.features.optional_features import load_player_availability
+
+        availability_source = load_player_availability()
+        if availability_source.empty:
+            raise ArtifactError(
+                "This model expects player-availability features but no "
+                "timestamped availability data is available. Supply "
+                "data/raw/player_availability.csv or retrain on the baseline "
+                "feature set."
+            )
 
     rows, prepared, errors = [], [], []
     for fixture in fixtures:
@@ -403,9 +442,19 @@ def predict_fixtures(
             home_rest = rest_days_as_of(history, home, form_as_of)
             away_rest = rest_days_as_of(history, away, form_as_of)
 
+            extras: dict[str, float] = {}
+            if optional_columns:
+                from src.features.optional_features import fixture_optional_features
+
+                extras = fixture_optional_features(
+                    raw, home, away, form_as_of, optional_columns,
+                    xg=xg_source, availability=availability_source,
+                )
+
             rows.append(build_feature_row(
                 home_form, away_form, market, headers,
                 short_rest=short_rest_flag(home_rest, away_rest),
+                extras=extras,
             ))
             prepared.append({
                 "home_team": home,

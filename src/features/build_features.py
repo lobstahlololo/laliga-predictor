@@ -35,6 +35,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.features.preprocessing import FeaturePreprocessor  # noqa: E402
 from src.utils.config import (  # noqa: E402
     AWAY_REST_MAX_DAYS,
+    BASELINE_FEATURE_GROUP,
     FEATURE_COLUMNS,
     FEATURE_REFERENCE_PATH,
     HOME_REST_MIN_DAYS,
@@ -213,15 +214,32 @@ def add_engineered_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_model_frame(
     df: pd.DataFrame,
+    feature_groups: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     """Return ``(X, y, metadata)`` aligned on the same rows.
 
-    Rows missing the target are dropped. Missing feature values are *kept*
-    for the preprocessor to impute with training medians, so no information
-    from the validation/test window influences imputation.
+    ``feature_groups`` is optional and defaults to the 19-feature baseline, so
+    every existing caller and the production preprocessor contract are
+    unchanged. Requesting ``xg`` or ``player_availability`` adds that group's
+    columns; an unavailable source raises instead of inventing values. Missing
+    values are kept for the preprocessor to impute with training medians, so
+    no information from validation/test influences imputation.
     """
+    groups = list(feature_groups or [BASELINE_FEATURE_GROUP])
     prepared = add_engineered_columns(compute_team_form(df))
-    missing = [c for c in FEATURE_COLUMNS if c not in prepared.columns]
+    if groups != [BASELINE_FEATURE_GROUP]:
+        from src.features.optional_features import (
+            attach_optional_features,
+            resolve_feature_columns,
+        )
+
+        columns, _statuses = resolve_feature_columns(groups)
+        prepared = attach_optional_features(
+            prepared, [g for g in groups if g != BASELINE_FEATURE_GROUP]
+        )
+    else:
+        columns = list(FEATURE_COLUMNS)
+    missing = [c for c in columns if c not in prepared.columns]
     if missing:
         raise ValueError(f"Engineered frame is missing features: {missing}")
 
@@ -237,7 +255,7 @@ def build_model_frame(
     ]
     meta = prepared[meta_cols].copy()
     y = prepared["match_outcome"].astype(int)
-    X = prepared[FEATURE_COLUMNS].apply(pd.to_numeric, errors="coerce")
+    X = prepared[columns].apply(pd.to_numeric, errors="coerce")
 
     valid_target = y.notna()
     X, y, meta = X[valid_target], y[valid_target], meta[valid_target]

@@ -84,6 +84,11 @@ def read_fixture_file(path: Path | str = FIXTURES_PATH) -> list[dict]:
 def load_upcoming_fixtures() -> tuple[list[dict], str]:
     """Load upcoming fixtures from CSV, then fixtures.txt.
 
+    The CSV written by :mod:`src.data.fixture_provider` carries stable fixture
+    IDs, kickoff timestamps and a status. ``finished``/``cancelled`` rows are
+    excluded; ``postponed`` rows are still returned (the next provider refresh
+    updates their date). Duplicate fixture IDs keep the last written row.
+
     Returns ``(fixtures, source_description)``. An empty list is valid and the
     dashboard shows an empty state instead of fabricating fixtures.
     """
@@ -95,6 +100,17 @@ def load_upcoming_fixtures() -> tuple[list[dict], str]:
                 raise ValueError(
                     f"upcoming_fixtures.csv needs columns {sorted(required)}"
                 )
+            if "status" in df.columns:
+                df = df[
+                    ~df["status"].astype(str).str.strip().str.lower().isin(
+                        {"finished", "cancelled", "canceled", "abandoned", "ft", "aet", "pen"}
+                    )
+                ]
+            if "fixture_id" in df.columns:
+                populated = df["fixture_id"].astype(str).str.strip() != ""
+                df = pd.concat([df[~populated], df[populated].drop_duplicates(
+                    subset="fixture_id", keep="last"
+                )])
             fixtures = []
             for _, row in df.iterrows():
                 home = str(row["home_team"]).strip()
@@ -112,11 +128,22 @@ def load_upcoming_fixtures() -> tuple[list[dict], str]:
                         odds = tuple(values)
                 except (TypeError, ValueError):
                     odds = None
+                match_date = str(row.get("match_date", "")).strip()
+                if not match_date:
+                    kickoff = pd.to_datetime(
+                        row.get("kickoff_utc", ""), errors="coerce", utc=True
+                    )
+                    if pd.notna(kickoff):
+                        match_date = f"{kickoff:%Y-%m-%d}"
                 fixtures.append({
                     "home_team": home,
                     "away_team": away,
-                    "match_date": str(row.get("match_date", "")).strip(),
+                    "match_date": match_date,
                     "odds": odds,
+                    "fixture_id": str(row.get("fixture_id", "")).strip(),
+                    "kickoff_utc": str(row.get("kickoff_utc", "")).strip(),
+                    "status": str(row.get("status", "scheduled")).strip() or "scheduled",
+                    "provider_event_id": str(row.get("provider_event_id", "")).strip(),
                 })
             return fixtures, str(UPCOMING_FIXTURES_PATH)
         except Exception as exc:  # noqa: BLE001 - fall back to text file

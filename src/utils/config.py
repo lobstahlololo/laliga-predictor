@@ -22,6 +22,10 @@ PROCESSED_DIR = DATA_DIR / "processed"
 RAW_PATH = RAW_DIR / "laliga_matches.csv"
 FIXTURES_PATH = PROJECT_ROOT / "fixtures.txt"
 UPCOMING_FIXTURES_PATH = RAW_DIR / "upcoming_fixtures.csv"
+# Optional historical feature sources. Neither file is invented: when absent,
+# the corresponding optional feature group is reported as unavailable.
+XG_HISTORY_PATH = RAW_DIR / "xg_history.csv"
+PLAYER_AVAILABILITY_PATH = RAW_DIR / "player_availability.csv"
 DATA_QUALITY_PATH = PROCESSED_DIR / "data_quality.json"
 FEATURE_REFERENCE_PATH = PROCESSED_DIR / "feature_reference.csv"
 
@@ -53,6 +57,9 @@ BASELINE_VS_ML_PATH = EVAL_DIR / "baseline_vs_ml.csv"
 FEATURE_EXPERIMENTS_PATH = EVAL_DIR / "feature_experiments.csv"
 FEATURE_EXPERIMENT_FOLDS_PATH = EVAL_DIR / "feature_experiment_folds.csv"
 FEATURE_RECOMMENDATION_PATH = EVAL_DIR / "feature_recommendation.json"
+# Optional-group ablation (xG / player availability) vs the 19-feature baseline.
+FEATURE_ABLATION_PATH = EVAL_DIR / "feature_ablation.csv"
+FEATURE_ABLATION_SUMMARY_PATH = EVAL_DIR / "feature_ablation_summary.json"
 CALIBRATION_COMPARISON_PATH = EVAL_DIR / "calibration_comparison.csv"
 CALIBRATION_SELECTION_PATH = EVAL_DIR / "calibration_selection.csv"
 CALIBRATION_DEPLOYMENT_PATH = EVAL_DIR / "calibration_recommendation.json"
@@ -84,6 +91,14 @@ UNCERTAINTY_SUMMARY_PATH = EVAL_DIR / "uncertainty_summary.json"
 
 EXPERIMENTS_DIR = MODEL_DIR / "experiments"
 EXPERIMENTS_INDEX_PATH = EXPERIMENTS_DIR / "index.csv"
+
+# Fixture discovery (Phase 5). The provider is selected at runtime through
+# LALIGA_FIXTURE_PROVIDER; these are non-secret defaults only.
+FIXTURE_PROVIDER_ENV = "LALIGA_FIXTURE_PROVIDER"
+FIXTURE_DISCOVERY_ENV = "LALIGA_FIXTURE_DISCOVERY"
+FIXTURE_API_KEY_ENV = "LALIGA_FOOTBALL_API_KEY"
+FIXTURE_API_BASE_ENV = "LALIGA_FOOTBALL_API_BASE"
+FIXTURE_LEAGUE_ID_ENV = "LALIGA_FOOTBALL_LEAGUE_ID"
 
 # Phase 4: model registry and operational artifacts.
 REGISTRY_DIR = MODEL_DIR / "registry"
@@ -135,6 +150,37 @@ IMPLIED_PROB_COLS = ["implied_prob_home", "implied_prob_draw", "implied_prob_awa
 # scaling, inference and the dashboard. It matches the historical pipeline
 # (rolling 5-match block, 3-match momentum block, market probabilities, goal
 # differentials, rest advantage, home advantage).
+# Optional feature groups are opt-in. The default and every registered
+# production snapshot use FEATURE_COLUMNS only; groups are added by an
+# explicit experiment and must earn their place in validation first.
+XG_FEATURE_COLUMNS = [
+    "home_xg_for_5",
+    "home_xg_against_5",
+    "home_xg_diff_5",
+    "away_xg_for_5",
+    "away_xg_against_5",
+    "away_xg_diff_5",
+    "home_xg_observations",
+    "away_xg_observations",
+]
+
+AVAILABILITY_FEATURE_COLUMNS = [
+    "home_availability_score",
+    "away_availability_score",
+    "home_missing_starters",
+    "away_missing_starters",
+    "availability_diff",
+    "home_availability_known",
+    "away_availability_known",
+]
+
+OPTIONAL_FEATURE_GROUPS = {
+    "xg": list(XG_FEATURE_COLUMNS),
+    "player_availability": list(AVAILABILITY_FEATURE_COLUMNS),
+}
+
+BASELINE_FEATURE_GROUP = "baseline"
+
 FEATURE_COLUMNS = [
     "away_form_goals_conceded",
     "away_form_goals_scored",

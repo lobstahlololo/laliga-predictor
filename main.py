@@ -61,12 +61,14 @@ def _api() -> int:
 
 STAGES = {
     "data": lambda: _run_module("src.data.make_dataset"),
+    "fixtures": lambda: _run_module("src.data.fixture_provider"),
     "features": lambda: _run_module("src.features.build_features"),
     "train": lambda: _run_module("src.models.train_model"),
     "predict": _predict,
     "backfill": lambda: _run_module("backfill_results"),
     "reports": lambda: _run_module("src.predictions.reports"),
     "experiments": lambda: _run_module("src.experiments.runner"),
+    "ablation": lambda: _run_module("src.experiments.feature_ablation"),
     "phase3": lambda: _run_module("src.experiments.phase3_runner"),
     "update": lambda: _run_module("src.pipeline.automation"),
     "registry": lambda: _run_module("src.models.registry"),

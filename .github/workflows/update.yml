@@ -33,6 +33,10 @@ jobs:
       - name: Refresh data, reconcile results, reports, monitoring
         env:
           LALIGA_ALERT_WEBHOOK: ${{ secrets.LALIGA_ALERT_WEBHOOK }}
+          # Optional: a personal TheSportsDB/API-Football key. The free public
+          # key is used when the secret is unset.
+          LALIGA_FOOTBALL_API_KEY: ${{ secrets.LALIGA_FOOTBALL_API_KEY }}
+          LALIGA_FIXTURE_PROVIDER: thesportsdb
         run: python -m src.pipeline.automation --steps data,predict,backfill,reports,monitoring --retries 2
 
       - name: Upload operational artifacts

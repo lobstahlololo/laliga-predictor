@@ -195,12 +195,24 @@ def step_data() -> dict:
     write_atomic(master, RAW_PATH)
     write_quality_report(quality, DATA_QUALITY_PATH)
     logger.info("Data refreshed: %d matches", len(master))
+
+    # Automated fixture discovery is best-effort: a provider outage or rate
+    # limit keeps the previously stored fixtures and never fails the data step.
+    try:
+        from src.data.fixture_provider import refresh_upcoming_fixtures
+
+        fixture_status = refresh_upcoming_fixtures().as_dict()
+    except Exception as exc:  # noqa: BLE001 - fixtures are a soft dependency
+        logger.warning("Fixture discovery skipped: %s", exc)
+        fixture_status = {"status": "error", "errors": [str(exc)]}
+
     return {
         "rows": int(len(master)),
         "seasons_fetched": quality.get("seasons_fetched", []),
         "seasons_failed": quality.get("seasons_failed", []),
         "rows_removed": quality.get("rows_removed", 0),
         "date_max": quality.get("date_max"),
+        "fixtures": fixture_status,
     }
 
 

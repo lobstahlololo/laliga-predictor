@@ -178,3 +178,127 @@ def test_runs_endpoint_returns_a_list(client):
     response = client.get("/runs")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+# ---------------------------------------------------------------------------
+# Caching integration
+# ---------------------------------------------------------------------------
+
+def _cached_payload():
+    return {"home_team": "Real Madrid", "away_team": "Barcelona"}
+
+
+@pytest.fixture()
+def cached_client(services, monkeypatch):
+    """An app with its own cache and a counting prediction engine."""
+    from src.api import main as api_main
+    from src.api.cache import InMemoryCache
+
+    calls = {"n": 0}
+    real_predict = api_main.predict_fixtures
+
+    def counting(*args, **kwargs):
+        calls["n"] += 1
+        return real_predict(*args, **kwargs)
+
+    monkeypatch.setattr(api_main, "predict_fixtures", counting)
+    app = api_main.create_app(cache=InMemoryCache(default_ttl=60))
+    app.dependency_overrides[get_services] = lambda: services
+    with TestClient(app) as client:
+        yield client, calls, services
+    app.dependency_overrides.clear()
+
+
+def test_repeated_prediction_is_served_from_cache(cached_client):
+    client, calls, _services = cached_client
+    first = client.post("/predict", json=_cached_payload())
+    second = client.post("/predict", json=_cached_payload())
+
+    assert first.status_code == 200
+    assert first.json() == second.json()
+    assert calls["n"] == 1
+
+
+def test_model_version_change_invalidates_cached_prediction(cached_client):
+    client, calls, services = cached_client
+    original = services.metadata["model_version"]
+    try:
+        assert client.post("/predict", json=_cached_payload()).status_code == 200
+        services.metadata["model_version"] = original + "-promoted"
+        assert client.post("/predict", json=_cached_payload()).status_code == 200
+        assert calls["n"] == 2
+    finally:
+        services.metadata["model_version"] = original
+
+
+def test_kickoff_and_odds_change_cache_identity(cached_client):
+    client, calls, _services = cached_client
+    first = {"home_team": "Real Madrid", "away_team": "Barcelona", "match_date": "2026-11-08"}
+    second = {"home_team": "Real Madrid", "away_team": "Barcelona", "match_date": "2026-11-15"}
+    with_odds = {
+        "home_team": "Real Madrid", "away_team": "Barcelona",
+        "match_date": "2026-11-08", "odds_home": 2.1, "odds_draw": 3.4, "odds_away": 3.6,
+    }
+
+    assert client.post("/predict", json=first).status_code == 200
+    assert client.post("/predict", json=second).status_code == 200
+    assert client.post("/predict", json=with_odds).status_code == 200
+    assert calls["n"] == 3
+
+
+class _BrokenRedis:
+    def get(self, key):
+        raise ConnectionError("redis down")
+
+    def setex(self, key, ttl, value):
+        raise ConnectionError("redis down")
+
+    def delete(self, key):
+        raise ConnectionError("redis down")
+
+    def scan_iter(self, match=None):
+        return []
+
+
+def test_api_still_predicts_when_cache_backend_fails(services):
+    from src.api import main as api_main
+    from src.api.cache import RedisCache
+
+    app = api_main.create_app(cache=RedisCache(_BrokenRedis()))
+    app.dependency_overrides[get_services] = lambda: services
+    try:
+        with TestClient(app) as client:
+            response = client.post("/predict", json=_cached_payload())
+            assert response.status_code == 200
+            assert sum(response.json()["probabilities"].values()) == pytest.approx(1.0)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_fixtures_endpoint_is_cached(services, monkeypatch):
+    from src.api import main as api_main
+    from src.api.cache import InMemoryCache
+
+    calls = {"n": 0}
+    monkeypatch.setattr(
+        api_main,
+        "load_upcoming_fixtures",
+        lambda: ([{"home_team": "Real Madrid", "away_team": "Barcelona",
+                   "match_date": "", "odds": None}], "test"),
+    )
+    real_predict = api_main.predict_fixtures
+
+    def counting(*args, **kwargs):
+        calls["n"] += 1
+        return real_predict(*args, **kwargs)
+
+    monkeypatch.setattr(api_main, "predict_fixtures", counting)
+    app = api_main.create_app(cache=InMemoryCache(default_ttl=60))
+    app.dependency_overrides[get_services] = lambda: services
+    try:
+        with TestClient(app) as client:
+            assert client.get("/fixtures").status_code == 200
+            assert client.get("/fixtures").status_code == 200
+        assert calls["n"] == 1
+    finally:
+        app.dependency_overrides.clear()

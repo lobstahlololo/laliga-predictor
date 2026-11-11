@@ -14,6 +14,7 @@ Interactive docs: http://127.0.0.1:8000/docs
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -22,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field, model_validator
 
 import sys
@@ -31,6 +32,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.api.cache import Cache, build_cache, cache_key, cached_call  # noqa: E402
 from src.features.build_features import build_team_history  # noqa: E402
 from src.models.elo import compute_elo, latest_elo_ratings  # noqa: E402
 from src.models.registry import RegistryError, current_production, list_models, status  # noqa: E402
@@ -262,6 +264,58 @@ def _records(frame: pd.DataFrame) -> list[dict]:
     return [_clean(row) for row in frame.to_dict(orient="records")]
 
 
+def get_cache(request: Request) -> Cache:
+    """FastAPI dependency returning the app's cache backend."""
+    cache = getattr(request.app.state, "cache", None)
+    return cache if cache is not None else build_cache("none")
+
+
+def _path_signature(path: Path) -> str:
+    try:
+        stat = path.stat()
+    except OSError:
+        return "missing"
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def _elo_ratings_payload(raw: pd.DataFrame) -> list[dict]:
+    """JSON-safe Elo tables (cached; refits are the expensive part)."""
+    return _clean(latest_elo_ratings(compute_elo(raw)[1]).to_dict(orient="records"))
+
+
+def _goal_model_payload(raw: pd.DataFrame, as_of: pd.Timestamp) -> dict:
+    """JSON-safe Poisson/Dixon-Coles strength tables."""
+    model = fit_goal_model(raw, as_of)
+    return _clean({
+        "attack": model.attack,
+        "defence": model.defence,
+        "matches": model.matches,
+    })
+
+
+def _data_fingerprint(services: Services) -> str:
+    """Fingerprint of everything that can make a cached prediction stale.
+
+    The production model version invalidates every entry on promotion or
+    rollback; raw/ledger/metadata file signatures invalidate on a data refresh
+    or retrain. Fixture identity and kickoff are added per request.
+    """
+    version = str(services.metadata.get("model_version") or "unversioned")
+    try:
+        production = current_production()
+    except RegistryError:
+        production = None
+    production_version = str((production or {}).get("version") or "")
+    payload = "|".join([
+        version,
+        production_version,
+        _path_signature(RAW_PATH),
+        _path_signature(LEDGER_PATH),
+        _path_signature(MODEL_METADATA_PATH),
+    ])
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def _prediction_payload(prediction: dict) -> Prediction:
     goal_model = prediction.get("goal_model")
     uncertainty = prediction.get("uncertainty")
@@ -294,7 +348,7 @@ def _prediction_payload(prediction: dict) -> Prediction:
 # Application
 # ---------------------------------------------------------------------------
 
-def create_app() -> FastAPI:
+def create_app(cache: Cache | None = None) -> FastAPI:
     app = FastAPI(
         title="La Liga Predictor API",
         version=API_VERSION,
@@ -304,6 +358,8 @@ def create_app() -> FastAPI:
             "documented validation/test windows."
         ),
     )
+    # One backend per application. Tests pass their own cache to isolate state.
+    app.state.cache = cache if cache is not None else build_cache()
 
     @app.exception_handler(ArtifactError)
     async def _artifact_error(_request, exc: ArtifactError):  # noqa: ANN001
@@ -370,40 +426,66 @@ def create_app() -> FastAPI:
     def fixtures(
         limit: int = Query(default=50, ge=1, le=500),
         services: Services = Depends(get_services),
+        cache: Cache = Depends(get_cache),
     ) -> list[Prediction]:
         fixtures, _source = load_upcoming_fixtures()
         if not fixtures:
             return []
-        predictions, errors = predict_fixtures(
-            fixtures[:limit],
-            model=services.model,
-            preprocessor=services.preprocessor,
-            metadata=services.metadata,
-            raw=services.raw,
-        )
-        if not predictions and errors:
-            raise HTTPException(
-                status_code=422,
-                detail={"message": "No fixture could be resolved.", "errors": errors},
+        selected = fixtures[:limit]
+        signature = cache_key(*[
+            (f.get("home_team"), f.get("away_team"),
+             f.get("match_date", ""), f.get("kickoff_utc", ""), f.get("odds"))
+            for f in selected
+        ])
+        key = cache_key("fixtures", _data_fingerprint(services), limit, signature)
+
+        def compute() -> list[dict]:
+            predictions, errors = predict_fixtures(
+                selected,
+                model=services.model,
+                preprocessor=services.preprocessor,
+                metadata=services.metadata,
+                raw=services.raw,
             )
-        return [_prediction_payload(p) for p in predictions]
+            if not predictions and errors:
+                raise HTTPException(
+                    status_code=422,
+                    detail={"message": "No fixture could be resolved.", "errors": errors},
+                )
+            return [_prediction_payload(p).model_dump() for p in predictions]
+
+        return [Prediction(**item) for item in cached_call(cache, key, compute)]
 
     @app.post("/predict", response_model=Prediction, tags=["predictions"])
     def predict(
-        request: FixtureRequest,
+        payload: FixtureRequest,
         services: Services = Depends(get_services),
+        cache: Cache = Depends(get_cache),
     ) -> Prediction:
-        predictions, errors = predict_fixtures(
-            [request.as_fixture()],
-            model=services.model,
-            preprocessor=services.preprocessor,
-            metadata=services.metadata,
-            raw=services.raw,
+        fixture = payload.as_fixture()
+        key = cache_key(
+            "predict",
+            _data_fingerprint(services),
+            fixture["home_team"],
+            fixture["away_team"],
+            fixture["match_date"],
+            fixture["odds"],
         )
-        if not predictions:
-            detail = errors[0]["error"] if errors else "Prediction failed."
-            raise HTTPException(status_code=422, detail=detail)
-        return _prediction_payload(predictions[0])
+
+        def compute() -> dict:
+            predictions, errors = predict_fixtures(
+                [fixture],
+                model=services.model,
+                preprocessor=services.preprocessor,
+                metadata=services.metadata,
+                raw=services.raw,
+            )
+            if not predictions:
+                detail = errors[0]["error"] if errors else "Prediction failed."
+                raise HTTPException(status_code=422, detail=detail)
+            return _prediction_payload(predictions[0]).model_dump()
+
+        return Prediction(**cached_call(cache, key, compute))
 
     @app.get("/teams", response_model=list[str], tags=["teams"])
     def teams(services: Services = Depends(get_services)) -> list[str]:
@@ -414,6 +496,7 @@ def create_app() -> FastAPI:
     def team_stats(
         team: str,
         services: Services = Depends(get_services),
+        cache: Cache = Depends(get_cache),
     ) -> TeamStatsResponse:
         available = sorted(
             set(services.raw["home_team"].astype(str))
@@ -443,9 +526,17 @@ def create_app() -> FastAPI:
         home_mask = rows["side"] == "home"
         recent = rows.tail(5)
 
-        elo = latest_elo_ratings(compute_elo(services.raw)[1])
-        elo_row = elo[elo["team"] == canonical]
-        goal_model = fit_goal_model(services.raw, pd.Timestamp.today().normalize())
+        fingerprint = _data_fingerprint(services)
+        today = pd.Timestamp.today().normalize()
+        elo_records = cached_call(
+            cache, cache_key("elo-ratings", fingerprint),
+            lambda: _elo_ratings_payload(services.raw),
+        )
+        elo_row = next((r for r in elo_records if r.get("team") == canonical), None)
+        goal_payload = cached_call(
+            cache, cache_key("goal-model", fingerprint, f"{today:%Y-%m-%d}"),
+            lambda: _goal_model_payload(services.raw, today),
+        )
         form = team_form(history, canonical) if not rows.empty else {}
 
         return TeamStatsResponse(
@@ -465,13 +556,13 @@ def create_app() -> FastAPI:
                 "W" if gf > ga else ("D" if gf == ga else "L")
                 for gf, ga in zip(recent["goals_scored"], recent["goals_conceded"])
             ),
-            elo_rating=float(elo_row["rating"].iloc[0]) if not elo_row.empty else None,
+            elo_rating=float(elo_row["rating"]) if elo_row else None,
             elo_rating_deviation=(
-                float(elo_row["rating_deviation"].iloc[0]) if not elo_row.empty else None
+                float(elo_row["rating_deviation"]) if elo_row else None
             ),
-            attack=float(goal_model.attack.get(canonical, 1.0)),
-            defence=float(goal_model.defence.get(canonical, 1.0)),
-            poisson_matches=int(goal_model.matches.get(canonical, 0)),
+            attack=float(goal_payload["attack"].get(canonical, 1.0)),
+            defence=float(goal_payload["defence"].get(canonical, 1.0)),
+            poisson_matches=int(goal_payload["matches"].get(canonical, 0)),
         )
 
     @app.get("/performance", response_model=PerformanceResponse, tags=["performance"])
