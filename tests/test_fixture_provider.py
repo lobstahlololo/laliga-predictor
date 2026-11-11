@@ -218,20 +218,96 @@ def test_provider_failure_keeps_existing_fixtures(tmp_path):
     assert path.read_text(encoding="utf-8") == before
 
 
+def _block_network(monkeypatch):
+    """Fail loudly if fixture discovery attempts an HTTP request."""
+
+    def boom(*args, **kwargs):
+        raise AssertionError("fixture discovery used the network unexpectedly")
+
+    monkeypatch.setattr(fp.requests, "get", boom)
+
+
 def test_discovery_can_be_disabled(tmp_path, monkeypatch):
     monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "0")
+    _block_network(monkeypatch)
     result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
     assert result.status == "disabled"
+    assert result.errors == []
 
 
-def test_unknown_provider_is_reported_without_network(tmp_path, monkeypatch):
-    # Discovery must be enabled for the provider name to be validated at all;
-    # CI sets LALIGA_FIXTURE_DISCOVERY=0 globally, so set it explicitly here.
+@pytest.mark.parametrize("name", [fp.THESPORTSDB, fp.API_FOOTBALL])
+def test_discovery_switch_disables_valid_providers(tmp_path, monkeypatch, name):
+    """Turning discovery off is silent even for a real provider name."""
+    monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "0")
+    monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, name)
+    _block_network(monkeypatch)
+    result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
+    assert result.status == "disabled"
+    assert result.errors == []
+
+
+@pytest.mark.parametrize("sentinel", ["none", "off", "disabled", "local"])
+def test_provider_disable_sentinels_stay_disabled(tmp_path, monkeypatch, sentinel):
+    monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "1")
+    monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, sentinel)
+    assert fp.provider_from_environment() is None
+    _block_network(monkeypatch)
+    result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
+    assert result.status == "disabled"
+    assert result.errors == []
+
+
+@pytest.mark.parametrize("discovery", [None, "1", "0"])
+def test_unknown_provider_is_an_error_without_network(tmp_path, monkeypatch, discovery):
+    """A mistyped provider is a configuration error, never a silent disable.
+
+    The name is validated before the discovery switch, so CI's job-wide
+    ``LALIGA_FIXTURE_DISCOVERY=0`` cannot hide it.
+    """
+    if discovery is None:
+        monkeypatch.delenv(fp.FIXTURE_DISCOVERY_ENV, raising=False)
+    else:
+        monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, discovery)
+    monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, "not-a-provider")
+    _block_network(monkeypatch)
+
+    result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
+    assert result.status == "error"
+    assert "Unknown fixture provider" in " ".join(result.errors)
+    assert not (tmp_path / "upcoming_fixtures.csv").exists()
+
+
+def test_unknown_provider_keeps_existing_fixtures_byte_for_byte(tmp_path, monkeypatch):
+    path = tmp_path / "upcoming_fixtures.csv"
+    fp.refresh_upcoming_fixtures(path, provider=StubProvider([_record()]))
+    before = path.read_bytes()
+
     monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "1")
     monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, "not-a-provider")
-    result = fp.refresh_upcoming_fixtures(tmp_path / "upcoming_fixtures.csv")
-    assert result.status in {"disabled", "error"}
-    assert "Unknown fixture provider" in " ".join(result.errors)
+    _block_network(monkeypatch)
+    result = fp.refresh_upcoming_fixtures(path)
+
+    assert result.status == "error"
+    assert result.kept == 1
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("thesportsdb", fp.TheSportsDBProvider),
+        ("TheSportsDB", fp.TheSportsDBProvider),
+        ("api-football", fp.ApiFootballProvider),
+        ("API-Football", fp.ApiFootballProvider),
+    ],
+)
+def test_valid_provider_names_are_still_built(monkeypatch, name, expected):
+    monkeypatch.setenv(fp.FIXTURE_DISCOVERY_ENV, "1")
+    monkeypatch.setenv(fp.FIXTURE_PROVIDER_ENV, name)
+    # API-Football refuses to construct without a key; construction only reads
+    # configuration and never performs a request.
+    monkeypatch.setenv(fp.FIXTURE_API_KEY_ENV, "test-key")
+    assert isinstance(fp.provider_from_environment(), expected)
 
 
 def test_load_upcoming_fixtures_filters_cancelled_and_dedupes(tmp_path, monkeypatch):

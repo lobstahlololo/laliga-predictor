@@ -438,19 +438,32 @@ class ApiFootballProvider:
 # ---------------------------------------------------------------------------
 
 def provider_from_environment() -> FixtureProvider | None:
-    """Build the configured provider, or ``None`` when discovery is disabled."""
-    if os.environ.get(FIXTURE_DISCOVERY_ENV, "1").strip().lower() in {"0", "false", "off", "no"}:
-        return None
+    """Build the configured provider, or ``None`` when discovery is disabled.
+
+    The provider *name* is validated before the discovery switch is honoured.
+    An unrecognised name is a configuration error, so it is raised as
+    :class:`FixtureProviderError` even when discovery is switched off;
+    otherwise a typo (``LALIGA_FIXTURE_PROVIDER=not-a-provider``) would look
+    exactly like a deliberate ``status="disabled"`` and silently suppress
+    upcoming fixtures for good.
+
+    Explicitly disabling discovery stays silent and network-free: the switch
+    (``LALIGA_FIXTURE_DISCOVERY=0/false/off/no``) and the disable sentinels
+    (``none``, ``off``, ``disabled``, ``local``) both return ``None``.
+    """
     name = os.environ.get(FIXTURE_PROVIDER_ENV, THESPORTSDB).strip().lower() or THESPORTSDB
     if name in DISABLED_PROVIDERS:
         return None
+    if name not in {THESPORTSDB, API_FOOTBALL}:
+        raise FixtureProviderError(
+            f"Unknown fixture provider {name!r}. Use {THESPORTSDB!r} or "
+            f"{API_FOOTBALL!r}, or set {FIXTURE_PROVIDER_ENV}=none to disable discovery."
+        )
+    if os.environ.get(FIXTURE_DISCOVERY_ENV, "1").strip().lower() in {"0", "false", "off", "no"}:
+        return None
     if name == THESPORTSDB:
         return TheSportsDBProvider()
-    if name == API_FOOTBALL:
-        return ApiFootballProvider()
-    raise FixtureProviderError(
-        f"Unknown fixture provider {name!r}. Use {THESPORTSDB!r} or {API_FOOTBALL!r}."
-    )
+    return ApiFootballProvider()
 
 
 def load_fixture_rows(path: Path = UPCOMING_FIXTURES_PATH) -> pd.DataFrame:
