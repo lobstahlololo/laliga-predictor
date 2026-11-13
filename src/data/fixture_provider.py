@@ -24,6 +24,12 @@ Provider notes (verified against the public documentation, November 2026):
   restrictive set of seasons; the next-fixtures endpoint only needs the
   current season. It requires a registered key, supplied through the same
   environment variable.
+* OpenFootball's ``football.json`` dataset publishes the complete La Liga
+  season (fixtures and results) as CC0 public-domain JSON, with no key and no
+  documented quota. Because it states the whole calendar it can verify
+  coverage, unlike the bounded "next events" windows above. It is updated
+  once a day from community-maintained sources, so kickoff times can lag the
+  official league announcement.
 
 Neither free tier is assumed to provide historical xG. Historical xG and
 player-availability features live in separate, optional files (see
@@ -50,9 +56,11 @@ import requests
 from src.utils.config import (
     FIXTURE_API_BASE_ENV,
     FIXTURE_API_KEY_ENV,
+    FIXTURE_CALENDAR_BASE_ENV,
     FIXTURE_DISCOVERY_ENV,
     FIXTURE_LEAGUE_ID_ENV,
     FIXTURE_PROVIDER_ENV,
+    FIXTURE_SEASON_ENV,
     UPCOMING_FIXTURES_PATH,
 )
 from src.utils.teams import canonical_team
@@ -180,6 +188,41 @@ def _iso_utc(date_value: Any, time_value: Any = None, timestamp: Any = None) -> 
     if pd.isna(parsed):
         return ""
     return f"{parsed:%Y-%m-%dT%H:%M:%SZ}"
+
+
+def is_date_only_kickoff(kickoff: str) -> bool:
+    """Whether a kickoff carries a date but no announced clock time."""
+    return str(kickoff or "").strip().endswith("T00:00:00Z")
+
+
+def _collapse_date_only_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Collapse time-less calendar rows into the timed row for the same fixture.
+
+    The season calendar often knows the date but not yet the kickoff time
+    (stored as ``00:00Z``), while another provider may already know the clock
+    time. Keeping both rows would duplicate the fixture and produce two
+    predictions. Two genuinely different clock times are *not* collapsed: that
+    disagreement stays visible to the coverage audit.
+    """
+    if frame.empty or "kickoff_utc" not in frame.columns:
+        return frame
+    date_only = frame["kickoff_utc"].astype(str).map(is_date_only_kickoff)
+    if not date_only.any():
+        return frame
+    drop: list = []
+    for _, group in frame.groupby("fixture_id", sort=False):
+        if len(group) < 2:
+            continue
+        timed = [index for index in group.index if not bool(date_only.loc[index])]
+        if not timed:
+            continue
+        for index in group.index:
+            if index != timed[0] and bool(date_only.loc[index]):
+                drop.append(index)
+    if not drop:
+        return frame
+    logger.info("Collapsed %d time-less duplicate fixture row(s).", len(drop))
+    return frame.drop(index=drop)
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +477,151 @@ class ApiFootballProvider:
 
 
 # ---------------------------------------------------------------------------
+# OpenFootball full-season calendar (free, public domain, no key)
+# ---------------------------------------------------------------------------
+
+OPENFOOTBALL = "openfootball"
+DEFAULT_PROVIDERS = (OPENFOOTBALL, THESPORTSDB)
+PROVIDER_CLASSES: dict[str, type] = {}
+
+
+def season_slug(moment: datetime | None = None) -> str:
+    """Return the La Liga season folder (``2026-27``) for a date.
+
+    The Spanish season starts in August, so a date before August belongs to
+    the season that began in the previous calendar year.
+    """
+    now = moment or datetime.now(timezone.utc)
+    start = now.year if now.month >= 8 else now.year - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
+def _final_score(score: Any) -> bool:
+    """Whether an OpenFootball ``score`` field holds a played final result."""
+    if isinstance(score, dict):
+        score = score.get("ft")
+    if isinstance(score, (list, tuple)) and len(score) == 2:
+        return all(isinstance(value, (int, float)) for value in score)
+    return False
+
+
+def records_from_openfootball(payload: dict) -> list[FixtureRecord]:
+    """Normalise an OpenFootball La Liga season calendar.
+
+    The feed contains the whole season (fixtures and results), so a malformed
+    payload is an error rather than an empty "no upcoming matches" answer.
+    Rows without two distinct team names are skipped and logged. A played
+    match is marked ``finished`` so the upcoming store cannot regress to old
+    results, and a fixture without a kickoff time keeps only its date instead
+    of inventing a time.
+    """
+    if not isinstance(payload, dict):
+        raise FixtureProviderError("OpenFootball payload is not an object.")
+    matches = payload.get("matches")
+    if matches is None:
+        raise FixtureProviderError("OpenFootball payload has no 'matches' list.")
+    if not isinstance(matches, list):
+        raise FixtureProviderError(
+            "OpenFootball payload has an unexpected 'matches' field."
+        )
+
+    fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    records: list[FixtureRecord] = []
+    for match in matches:
+        if not isinstance(match, dict):
+            continue
+        home = _clean_team(match.get("team1"))
+        away = _clean_team(match.get("team2"))
+        if not home or not away or home.lower() == away.lower():
+            logger.warning(
+                "Skipping OpenFootball fixture without two distinct teams: %r", match
+            )
+            continue
+        records.append(FixtureRecord(
+            home_team=home,
+            away_team=away,
+            kickoff_utc=_iso_utc(match.get("date"), match.get("time")),
+            provider=OPENFOOTBALL,
+            provider_event_id="",
+            status=(
+                "finished"
+                if _final_score(match.get("score"))
+                else normalize_status(match.get("status"))
+            ),
+            source="openfootball:es.1",
+            fetched_at=fetched_at,
+        ))
+    return records
+
+
+class OpenFootballProvider:
+    """Complete La Liga season calendar from the ``football.json`` dataset.
+
+    ``covers_full_season`` distinguishes this source from the bounded "next
+    events" windows of TheSportsDB and API-Football: only a full calendar can
+    verify that no fixture is missing.
+    """
+
+    name = OPENFOOTBALL
+    covers_full_season = True
+
+    def __init__(
+        self,
+        *,
+        season: str | None = None,
+        base_url: str | None = None,
+        limiter: RateLimiter | None = None,
+        timeout: float = REQUEST_TIMEOUT,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self.base_url = (
+            base_url
+            or os.environ.get(FIXTURE_CALENDAR_BASE_ENV, "")
+            or "https://raw.githubusercontent.com/openfootball/football.json/master"
+        ).rstrip("/")
+        self.season = str(
+            season or os.environ.get(FIXTURE_SEASON_ENV, "") or season_slug()
+        ).strip()
+        self.limiter = limiter or RateLimiter(max_calls=30, period_seconds=60, sleep=sleeper)
+        self.timeout = timeout
+        self._sleep = sleeper
+
+    @property
+    def source_url(self) -> str:
+        return f"{self.base_url}/{self.season}/es.1.json"
+
+    def fetch_payload(self) -> dict:
+        payload = _request_json(
+            self.source_url,
+            limiter=self.limiter,
+            timeout=self.timeout,
+            sleep=self._sleep,
+        )
+        if not isinstance(payload, dict):
+            raise FixtureProviderError("OpenFootball calendar payload is not an object.")
+        return payload
+
+    def fetch_upcoming(self) -> list[FixtureRecord]:
+        records = records_from_openfootball(self.fetch_payload())
+        upcoming = [
+            record for record in records
+            if normalize_status(record.status) != "finished"
+        ]
+        logger.info(
+            "OpenFootball returned %d upcoming La Liga fixture(s) for %s.",
+            len(upcoming), self.season,
+        )
+        return upcoming
+
+
+PROVIDER_CLASSES.update({
+    THESPORTSDB: TheSportsDBProvider,
+    API_FOOTBALL: ApiFootballProvider,
+    OPENFOOTBALL: OpenFootballProvider,
+})
+
+
+# ---------------------------------------------------------------------------
 # Storage / reconciliation
 # ---------------------------------------------------------------------------
 
@@ -451,19 +639,47 @@ def provider_from_environment() -> FixtureProvider | None:
     (``LALIGA_FIXTURE_DISCOVERY=0/false/off/no``) and the disable sentinels
     (``none``, ``off``, ``disabled``, ``local``) both return ``None``.
     """
-    name = os.environ.get(FIXTURE_PROVIDER_ENV, THESPORTSDB).strip().lower() or THESPORTSDB
-    if name in DISABLED_PROVIDERS:
-        return None
-    if name not in {THESPORTSDB, API_FOOTBALL}:
+    providers = providers_from_environment()
+    return providers[0] if providers else None
+
+
+def configured_provider_names() -> list[str]:
+    """Parse ``LALIGA_FIXTURE_PROVIDER`` into validated, de-duplicated names.
+
+    The variable accepts a comma-separated list so a complete season calendar
+    can be merged with a bounded live window. Explicit disable sentinels
+    (``none``/``off``/``disabled``/``local``) and the discovery switch return
+    an empty list, but an unrecognised name is a configuration error and is
+    reported even when discovery is switched off: a typo must never look like
+    a deliberate disable.
+    """
+    raw = os.environ.get(FIXTURE_PROVIDER_ENV, ",".join(DEFAULT_PROVIDERS))
+    names = [part.strip().lower() for part in str(raw).split(",") if part.strip()]
+    if not names:
+        names = list(DEFAULT_PROVIDERS)
+    unknown = [
+        name for name in names
+        if name not in DISABLED_PROVIDERS and name not in PROVIDER_CLASSES
+    ]
+    if unknown:
         raise FixtureProviderError(
-            f"Unknown fixture provider {name!r}. Use {THESPORTSDB!r} or "
-            f"{API_FOOTBALL!r}, or set {FIXTURE_PROVIDER_ENV}=none to disable discovery."
+            f"Unknown fixture provider {unknown[0]!r}. Use "
+            f"{', '.join(repr(n) for n in PROVIDER_CLASSES)} (comma-separated), "
+            f"or set {FIXTURE_PROVIDER_ENV}=none to disable discovery."
         )
     if os.environ.get(FIXTURE_DISCOVERY_ENV, "1").strip().lower() in {"0", "false", "off", "no"}:
-        return None
-    if name == THESPORTSDB:
-        return TheSportsDBProvider()
-    return ApiFootballProvider()
+        return []
+    ordered: list[str] = []
+    for name in names:
+        if name in DISABLED_PROVIDERS or name in ordered:
+            continue
+        ordered.append(name)
+    return ordered
+
+
+def providers_from_environment() -> list[FixtureProvider]:
+    """Build every configured provider; ``[]`` means discovery is disabled."""
+    return [PROVIDER_CLASSES[name]() for name in configured_provider_names()]
 
 
 def load_fixture_rows(path: Path = UPCOMING_FIXTURES_PATH) -> pd.DataFrame:
@@ -572,7 +788,17 @@ def merge_fixtures(
                     and incoming_kickoff
                     and previous_kickoff != incoming_kickoff
                 ):
-                    target = None
+                    if is_date_only_kickoff(previous_kickoff) and not is_date_only_kickoff(incoming_kickoff):
+                        # Same fixture, one provider merely lacks the clock
+                        # time: adopt the more precise kickoff on one row.
+                        target = fixture_target
+                    elif is_date_only_kickoff(incoming_kickoff):
+                        # Never let a time-less payload erase a known clock time.
+                        row["kickoff_utc"] = previous_kickoff
+                        row["match_date"] = previous.get("match_date", "")
+                        target = fixture_target
+                    else:
+                        target = None
                 else:
                     target = fixture_target
             elif not str(row.get("kickoff_utc", "")).strip():
@@ -614,6 +840,7 @@ def merge_fixtures(
         if column not in frame.columns:
             frame[column] = ""
     frame = frame[FIXTURE_COLUMNS]
+    frame = _collapse_date_only_rows(frame)
     frame = frame.drop_duplicates(subset=["fixture_id", "kickoff_utc"], keep="last")
     frame["_sort"] = pd.to_datetime(frame["kickoff_utc"], errors="coerce", utc=True)
     frame = frame.sort_values(["_sort", "fixture_id"], na_position="last").drop(columns="_sort")
@@ -665,6 +892,9 @@ class FixtureDiscoveryResult:
     errors: list[str] = field(default_factory=list)
     path: str = str(UPCOMING_FIXTURES_PATH)
     failed_providers: list[str] = field(default_factory=list)
+    # Only a full-season calendar may claim a complete schedule; a "next
+    # events" window is always a partial view.
+    schedule_scope: str = "partial_provider_window"
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -693,8 +923,8 @@ def refresh_upcoming_fixtures(
     provider_list = list(providers or ([] if provider is None else [provider]))
     if providers is None and provider is None:
         try:
-            provider = provider_from_environment()
-        except Exception as exc:  # noqa: BLE001 - disabled/misconfigured provider
+            provider_list = providers_from_environment()
+        except Exception as exc:  # noqa: BLE001 - misconfigured provider
             result = FixtureDiscoveryResult(
                 status="error",
                 provider="",
@@ -706,12 +936,10 @@ def refresh_upcoming_fixtures(
                 raise
             logger.warning("Fixture discovery unavailable: %s", exc)
             return result
-    if provider is None and not provider_list:
+    if not provider_list:
         return FixtureDiscoveryResult(
             status="disabled", kept=len(existing), path=str(path)
         )
-    if not provider_list:
-        provider_list = [provider]
 
     batches: dict[str, list[FixtureRecord]] = {}
     errors: list[str] = []
@@ -759,6 +987,15 @@ def refresh_upcoming_fixtures(
         "Fixtures refreshed from %s: %d fetched, %d stored (%d kept from before).",
         ", ".join(batches), len(incoming), len(merged), len(existing),
     )
+    successful = [
+        current for current in provider_list
+        if str(getattr(current, "name", "")) in batches
+    ]
+    scope = "partial_provider_window"
+    if successful and all(
+        getattr(current, "covers_full_season", False) for current in successful
+    ):
+        scope = "full_season_calendar"
     return FixtureDiscoveryResult(
         status=status,
         provider=",".join(batches),
@@ -768,6 +1005,7 @@ def refresh_upcoming_fixtures(
         errors=errors,
         path=str(path),
         failed_providers=failed,
+        schedule_scope=scope,
     )
 
 

@@ -299,6 +299,7 @@ def test_unknown_provider_keeps_existing_fixtures_byte_for_byte(tmp_path, monkey
         ("TheSportsDB", fp.TheSportsDBProvider),
         ("api-football", fp.ApiFootballProvider),
         ("API-Football", fp.ApiFootballProvider),
+        ("openfootball", fp.OpenFootballProvider),
     ],
 )
 def test_valid_provider_names_are_still_built(monkeypatch, name, expected):

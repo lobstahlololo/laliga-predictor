@@ -11,7 +11,9 @@ It reports, without inventing data:
 * teams in the most recent full season that are missing from the current one;
 * upcoming-fixture counts, teams covered, missing dates and stale snapshots;
 * duplicate fixture IDs and conflicting kickoff/status observations;
-* provider freshness, last success, request/failure counts and fixture counts.
+* provider freshness, last success, request/failure counts and fixture counts;
+* a comparison against a cached full-season calendar when one exists, which is
+  the only case where completeness is verified rather than described as unknown.
 
 Reports are written as JSON (machine-readable), CSV (team/season coverage) and
 Markdown (human-readable).
@@ -28,6 +30,11 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from src.data.football_calendar import (
+    CALENDAR_HORIZON_DAYS,
+    compare_with_calendar,
+    load_calendar,
+)
 from src.data.fixture_provider import (
     FIXTURE_COLUMNS,
     load_fixture_rows,
@@ -349,12 +356,17 @@ def audit_fixture_coverage(
     telemetry: ProviderTelemetry | None = None,
     stale_days: int = STALE_DATA_DAYS,
     full_season_threshold: int = MIN_FULL_SEASON_MATCHES,
+    calendar: pd.DataFrame | None = None,
+    calendar_meta: dict | None = None,
+    horizon_days: int = CALENDAR_HORIZON_DAYS,
 ) -> tuple[dict, pd.DataFrame]:
     """Measure historical and upcoming fixture coverage.
 
-    Returns ``(report, team_season_coverage)``. The report explicitly marks
-    schedule completeness as unknown: a provider window cannot prove that all
-    fixtures exist, and the audit never fabricates the missing ones.
+    Returns ``(report, team_season_coverage)``. Without a ``calendar`` the
+    report marks schedule completeness as unknown: a provider window cannot
+    prove that all fixtures exist and the audit never fabricates the missing
+    ones. Supplying a verified full-season calendar upgrades completeness to
+    ``verified_against_calendar`` and lists exactly which fixtures are absent.
     """
     raw = _read_raw(RAW_PATH) if raw is None else raw.copy()
     fixtures = load_fixture_rows() if fixtures is None else fixture_frame(fixtures)
@@ -514,6 +526,41 @@ def audit_fixture_coverage(
             "No upcoming fixtures are stored. Coverage is unknown, not zero."
         )
 
+    # Calendar verification: only a complete season calendar can prove that a
+    # fixture is missing rather than merely absent from a provider window.
+    upcoming["calendar_comparison"] = None
+    upcoming["calendar_source"] = None
+    upcoming["calendar_generated_at"] = None
+    has_calendar = calendar is not None and len(calendar) > 0
+    if has_calendar:
+        comparison = compare_with_calendar(
+            fixtures, calendar, now=now, horizon_days=horizon_days
+        )
+        upcoming["calendar_comparison"] = comparison
+        upcoming["calendar_source"] = (calendar_meta or {}).get("source")
+        upcoming["calendar_generated_at"] = (calendar_meta or {}).get("fetched_at")
+        upcoming["expected_fixtures"] = comparison["calendar_upcoming"]
+        upcoming["schedule_completeness"] = "verified_against_calendar"
+        if comparison["missing"]:
+            warnings.append(
+                f"{comparison['missing']} upcoming fixture(s) in the season calendar "
+                f"are missing from the store (coverage "
+                f"{comparison['coverage_fraction']:.1%})."
+                if comparison["coverage_fraction"] is not None
+                else f"{comparison['missing']} upcoming fixture(s) are missing from the store."
+            )
+        if comparison["teams_without_fixtures"]:
+            warnings.append(
+                "Calendar verification found no stored fixture for: "
+                + ", ".join(comparison["teams_without_fixtures"])
+                + "."
+            )
+        if comparison["rescheduled"]:
+            warnings.append(
+                f"{comparison['rescheduled']} stored fixture(s) disagree with the "
+                "calendar date; they are reported as rescheduled, not merged silently."
+            )
+
     if missing_teams:
         warnings.append(
             f"Teams present in reference season {reference_season} but absent from "
@@ -522,6 +569,15 @@ def audit_fixture_coverage(
 
     provider_summary = (telemetry or ProviderTelemetry()).summary()
     providers = provider_summary.get("providers", {})
+    upcoming["provider_coverage_history"] = [
+        {
+            "provider": attempt.get("provider"),
+            "at": attempt.get("at"),
+            "status": attempt.get("status"),
+            "fetched": attempt.get("fetched"),
+        }
+        for attempt in provider_summary.get("recent_attempts", [])
+    ]
     for name, entry in providers.items():
         consecutive = int(entry.get("consecutive_failures", 0) or 0)
         if consecutive >= 3:
@@ -648,6 +704,8 @@ def write_coverage_reports(
         f"- Schedule completeness: **{report['upcoming']['schedule_completeness']}** "
         "(a provider window is not an authoritative league calendar).",
         "",
+        *_calendar_markdown(report["upcoming"]),
+        "",
         "## Provider telemetry",
         "",
         _markdown_table(
@@ -674,12 +732,54 @@ def write_coverage_reports(
     return [json_path, csv_path, markdown_path]
 
 
+def _calendar_markdown(upcoming: dict) -> list[str]:
+    """Markdown section for the calendar comparison (or its absence)."""
+    comparison = upcoming.get("calendar_comparison")
+    if not comparison:
+        return [
+            "## Season calendar comparison",
+            "",
+            "_No verified season calendar is cached, so completeness stays "
+            "`unknown_partial_provider_window`. Run "
+            "`python -m src.data.football_calendar --refresh` to enable verification._",
+        ]
+    lines = [
+        "## Season calendar comparison",
+        "",
+        f"- Calendar source: `{upcoming.get('calendar_source') or 'unknown'}` "
+        f"(fetched {upcoming.get('calendar_generated_at') or 'unknown'}).",
+        f"- Calendar fixtures still to play: {comparison['calendar_upcoming']} "
+        f"(horizon {comparison['horizon_days']} days: "
+        f"{comparison['within_horizon']['calendar_upcoming']}).",
+        f"- Stored upcoming fixtures: {comparison['stored_upcoming']}.",
+        f"- Matched: {comparison['matched']}; missing: {comparison['missing']}; "
+        f"unexpected: {comparison['unexpected']}; rescheduled: {comparison['rescheduled']}.",
+        f"- Coverage: **{comparison['coverage_fraction']:.1%}** of the calendar "
+        if comparison["coverage_fraction"] is not None else "- Coverage: unknown.",
+        f"- Teams without a stored fixture: "
+        f"{', '.join(comparison['teams_without_fixtures']) or 'none'}.",
+        "",
+        "### Missing fixtures",
+        "",
+        _markdown_table(
+            pd.DataFrame(comparison["missing_fixtures"]),
+            ["home_team", "away_team", "match_date", "kickoff_utc"],
+            max_rows=20,
+        ),
+    ]
+    return lines
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)-8s | %(message)s",
     )
-    report, coverage = audit_fixture_coverage()
+    calendar, calendar_meta = load_calendar()
+    report, coverage = audit_fixture_coverage(
+        calendar=calendar if not calendar.empty else None,
+        calendar_meta=calendar_meta,
+    )
     paths = write_coverage_reports(report, coverage)
     print(json.dumps({
         "status": report["status"],

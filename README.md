@@ -23,6 +23,10 @@ data rather than asserted.
 
 - Downloads real La Liga results, shots, shots on target and Bet365 odds from
   [Football-Data.co.uk](https://www.football-data.co.uk/) (SP1).
+- Discovers the upcoming La Liga fixtures from a public full-season calendar
+  ([OpenFootball](https://github.com/openfootball/football.json), CC0, no key)
+  merged with TheSportsDB/API-Football windows, then verifies completeness
+  against that calendar instead of assuming a provider window is the schedule.
 - Validates, de-duplicates and normalizes the raw dataset, with an incremental
   refresh that keeps cached data when a download fails.
 - Builds 19 features using only information available before kickoff.
@@ -154,6 +158,7 @@ laliga-predictor/
 │   │   ├── validation.py         # schema, dedupe, team normalization, quality
 │   │   ├── fixture_provider.py    # TheSportsDB/API-Football discovery + safe merge
 │   │   ├── fixture_coverage.py    # coverage, conflicts, provider telemetry
+│   │   ├── football_calendar.py  # season calendar cache + completeness check
 │   │   ├── data_quality.py        # column/season quality audit + reports
 │   │   └── historical_sources.py  # xG/availability source audit (no network)
 │   ├── features/
@@ -209,7 +214,7 @@ laliga-predictor/
 │       ├── 5_Model_Monitoring.py
 │       ├── 6_Model_Intelligence.py
 │       └── 7_Model_Operations.py
-├── tests/                        # 97 pytest tests
+├── tests/                        # 201 pytest tests
 ├── models/
 │   ├── saved_models/             # best_model.pkl, per-model pkl, metadata JSON
 │   ├── evaluation/               # metrics CSVs, PNGs, evaluation_summary.json
@@ -286,6 +291,7 @@ python main.py reports    # ledger CSV/Markdown reports
 python main.py experiments # baselines, features, calibration, SHAP, monitoring
 python main.py phase3     # Elo, Poisson/Dixon-Coles, ensembles, market, uncertainty
 python main.py quality    # data-quality audit (JSON/CSV/Markdown)
+python main.py calendar   # cache the season calendar and compare coverage
 python main.py coverage   # fixture coverage + provider telemetry
 python main.py sources    # historical xG/availability source audit
 python main.py evaluation # full-season out-of-sample comparison with intervals
@@ -365,9 +371,21 @@ powershell -ExecutionPolicy Bypass -File run_pipeline.ps1 -SkipPrediction
 - Odds are coerced to numeric; implied probabilities are `1 / decimal odds`.
 - Output is sorted chronologically and written atomically.
 
-### Upcoming fixtures (not invented)
+### Upcoming fixtures (discovered, then verified)
 
-Two input formats are supported, in priority order:
+Fixtures are discovered automatically from the configured provider list
+(`openfootball,thesportsdb` by default) and written to
+`data/raw/upcoming_fixtures.csv` with stable IDs, kickoff timestamps, status and
+source attribution. `python main.py calendar` caches the openfootball season
+calendar, and the coverage audit then compares the stored fixtures with it:
+measured on 2026-11-12, **312** fixtures covered **20/20** clubs and **260/260**
+calendar fixtures (100%). Without a cached calendar the audit reports
+`unknown_partial_provider_window` rather than claiming completeness. See
+[`docs/FIXTURE_PROVIDERS.md`](docs/FIXTURE_PROVIDERS.md) for configuration and
+merge rules.
+
+The manual input formats below remain supported as an override, in priority
+order:
 
 1. `data/raw/upcoming_fixtures.csv`
 
@@ -641,15 +659,21 @@ fraction is **1.19%** (early-season form warm-up), below the 5% threshold.
 Reports: `reports/data_quality.json`, `reports/data_quality_by_column.csv`,
 `reports/data_quality_by_season.csv`, `reports/data_quality.md`.
 
-**Fixture coverage.** TheSportsDB currently returns only **1** upcoming fixture
-covering 2 of 20 teams. The audit records that as an incomplete provider
-window (`unknown_partial_provider_window`), not a complete schedule, and does
-not fabricate the other fixtures. There are no duplicate IDs or conflicting
-kickoffs in the current store. The reference season `25/26` contains Girona,
-Mallorca and Oviedo; `26/27` contains La Coruna, Malaga and Santander, a real
-promotion/relegation change. Reports: `reports/fixture_coverage.json`,
-`reports/fixture_coverage.md`. Provider freshness/failure telemetry is written
-to `data/processed/fixture_provider_status.json` for scheduled runs.
+**Fixture coverage.** After Phase 7 the store holds **312** upcoming fixtures
+from `openfootball` (311) and `thesportsdb` (1), covering **20 of 20** clubs with
+0 duplicate IDs, 0 conflicting kickoffs and 0 missing dates. Verified against
+the public `2026-27/es.1.json` calendar: **260** fixtures still to play, **260
+matched**, **0 missing** (100%), and a schedule completeness of
+`verified_against_calendar`. One fixture disagrees on the date (Athletic Bilbao
+vs Espanyol: TheSportsDB 2026-11-20, calendar 2026-11-22) and is reported as
+`rescheduled` rather than silently resolved. TheSportsDB alone returns 1 fixture
+because its free `eventsnextleague` endpoint is capped at one event; the
+calendar provider exists to make completeness measurable instead of assumed.
+The reference season `25/26` contains Girona, Mallorca and Oviedo; `26/27`
+contains La Coruna, Malaga and Santander, a real promotion/relegation change.
+Reports: `reports/fixture_coverage.json`, `reports/fixture_coverage.md`.
+Provider freshness/failure telemetry is written to
+`data/processed/fixture_provider_status.json` for scheduled runs.
 
 **Historical xG and player availability.** No timestamped local extract exists,
 so both groups are reported as **unavailable**; no values are simulated and no
@@ -854,7 +878,7 @@ this environment, and no deployment success is claimed.
 python -m pytest
 ```
 
-Current result: **168 passed**.
+Current result: **201 passed**.
 
 Coverage includes:
 
@@ -886,6 +910,7 @@ Coverage includes:
 - Streamlit smoke tests for Home, Match Predictions and Model Operations.
 - Data-quality anomaly detection, configurable thresholds and strict JSON/CSV/Markdown reports.
 - Fixture coverage, duplicate/conflict detection, partial-provider preservation, stable IDs and provider telemetry.
+- OpenFootball calendar normalisation, 20/20 team-name canonicalisation, full-season provider scopes, multi-provider priority lists and the 14-day/whole-season calendar comparison (missing, rescheduled, unexpected, per-team completeness).
 - Historical xG/availability source audit with time-aware coverage and no network requests.
 - Full-season evaluation protocol, bootstrap intervals, walk-forward exclusion of the final test season and small-sample breakdown refusal.
 - Prediction monitoring counts, missing predictions, invalid probabilities and explicit insufficient-sample states.
@@ -915,9 +940,16 @@ generations.
 
 ## 17. Known limitations
 
-- **No live fixture discovery.** Results refresh from the published season sheet,
-  but upcoming fixtures still come from `upcoming_fixtures.csv`/`fixtures.txt` or
-  the API payload; no kickoff time or league-wide fixture feed is assumed.
+- **Fixture discovery is calendar-dependent.** Coverage can only be *verified*
+  after `python main.py calendar` caches the openfootball season; that dataset is
+  community-maintained and refreshed about once a day, so it can lag official
+  announcements and may miss recent results (a past fixture then stays
+  `scheduled`, which the audit shows but never treats as a result). Kickoff clock
+  times are published for only part of the season; a date-only record merges into
+  a timed one from another provider rather than being invented.
+- **TheSportsDB's free tier returns one fixture.** `eventsnextleague` is capped
+  at 1 event (20 on premium), so it cannot supply league-wide coverage alone.
+  API-Football needs a key and its free plan does not cover the current season.
 - **Registry promotion uses one validation window.** A challenger that wins on
   validation can still lose on test; the registry records both and never promotes
   automatically.

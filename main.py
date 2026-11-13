@@ -64,6 +64,7 @@ STAGES = {
     "fixtures": lambda: _run_module("src.data.fixture_provider"),
     "quality": lambda: _run_module("src.data.data_quality"),
     "coverage": lambda: _run_module("src.data.fixture_coverage"),
+    "calendar": lambda: _run_module("src.data.football_calendar"),
     "sources": lambda: _run_module("src.data.historical_sources"),
     "features": lambda: _run_module("src.features.build_features"),
     "train": lambda: _run_module("src.models.train_model"),

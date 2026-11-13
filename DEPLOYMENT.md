@@ -39,6 +39,7 @@ Audit the data, coverage and evaluation before deploying:
 
 ```bash
 python main.py quality
+python main.py calendar
 python main.py coverage
 python main.py sources
 python main.py evaluation
@@ -55,11 +56,13 @@ Then run the dashboard (`python main.py dashboard`) or API (`python main.py api`
 | `LALIGA_API_PORT` | `8000` | FastAPI port |
 | `LALIGA_ALERT_WEBHOOK` | unset | JSON POST target for failed update cycles |
 | `LALIGA_ALERT_TIMEOUT` | `10` | Webhook timeout in seconds |
-| `LALIGA_FIXTURE_PROVIDER` | `thesportsdb` | `thesportsdb`, `api-football`, or a disabled value |
+| `LALIGA_FIXTURE_PROVIDER` | `openfootball,thesportsdb` | Comma-separated provider list (`openfootball`, `thesportsdb`, `api-football`) or a disabled value |
 | `LALIGA_FIXTURE_DISCOVERY` | `1` | `0` disables network fixture discovery |
-| `LALIGA_FOOTBALL_API_KEY` | unset | Optional personal provider key |
+| `LALIGA_FOOTBALL_API_KEY` | unset | API-Football key (also the optional personal TheSportsDB key) |
 | `LALIGA_FOOTBALL_API_BASE` | provider default | Optional base URL override |
 | `LALIGA_FOOTBALL_LEAGUE_ID` | `4335` / `140` | Optional league ID override |
+| `LALIGA_FIXTURE_CALENDAR_BASE` | openfootball raw GitHub base | Optional full-season calendar base URL |
+| `LALIGA_FIXTURE_SEASON` | derived (`2026-27`) | Season folder for the calendar dataset |
 | `LALIGA_FIXTURE_TELEMETRY` | `0` | `1` records provider freshness/failure telemetry in scheduled runs |
 | `LALIGA_CACHE_BACKEND` | `memory` | `memory`, `redis`, or `none` |
 | `LALIGA_CACHE_TTL` | `300` | Default cache TTL in seconds |
@@ -128,7 +131,11 @@ data → quality → coverage → predict → backfill → reports → monitorin
 and is safe to repeat: downloads merge and de-duplicate, predictions are keyed by
 fixture/timestamp/model version, and reconciliation only fills blank results.
 The cycle never registers, promotes or overwrites a registry snapshot; set
-`LALIGA_FIXTURE_TELEMETRY=1` to record provider freshness/failure state.
+`LALIGA_FIXTURE_TELEMETRY=1` to record provider freshness/failure state. Run
+`python main.py calendar` (or `python -m src.data.football_calendar --refresh`)
+whenever you want coverage verified against a freshly downloaded season
+calendar; until then the store is refreshed from the providers but completeness
+is reported as unknown.
 
 ### GitHub Actions (included)
 
@@ -225,7 +232,7 @@ model artifacts or an unreadable registry. OpenAPI docs are served at `/docs`.
 | API | `uvicorn src.api.main:app` | all endpoints exercised by `tests/test_api.py` |
 | Clean environment | `pip install -r requirements.txt` in a fresh venv | no credentials or external services required |
 | Data-quality audit | `python main.py quality` | 0 errors on the current cache; JSON/CSV/Markdown written |
-| Fixture coverage | `python main.py coverage` | 1 upcoming fixture from one provider; schedule marked incomplete, not fabricated |
+| Fixture coverage | `python main.py coverage` | 312 fixtures, 20/20 clubs, 100% of the 260 calendar fixtures; completeness `verified_against_calendar` |
 | Historical sources | `python main.py sources` | xG and availability unavailable; 0 network requests |
 | Full-season evaluation | `python main.py evaluation` | validation-selected ensemble, one-shot 119-match test, bootstrap intervals |
 | Live monitoring | `python main.py monitor` | 0 settled rows, explicitly `insufficient_data` |

@@ -32,25 +32,44 @@ Thresholds live in `src/data/data_quality.py` (`QualityThresholds`) and
 `src/utils/config.py`. An in-progress season is allowed to be smaller than a
 full season; a completed season outside 340–420 matches is flagged.
 
-## 2. Upcoming fixtures (provider window, incomplete by design)
+## 2. Upcoming fixtures (calendar-verified)
 
-Two providers are implemented behind one interface in
-`src/data/fixture_provider.py`:
+### 2.1 Provider comparison (researched 2026-11-12)
 
-| Provider | Endpoint | Credentials | Notes |
-|---|---|---|---|
-| TheSportsDB | `eventsnextleague.php?id=4335` | Free public key by default | Returns a small next-events window |
-| API-Football | `fixtures?league=140&next=20` | Registered key (`LALIGA_FOOTBALL_API_KEY`) | Free plan is request-limited |
+Verified from provider documentation; "assumption" marks anything not confirmed.
 
-Measured by `python main.py coverage` on the current store:
+| Provider | Integrated | Credentials | Documented limits | Measured La Liga result | Full-season calendar? | Redistribution |
+|---|---|---|---|---|---|---|
+| **OpenFootball `football.json`** (`2026-27/es.1.json`) | **yes** (`openfootball`) | none | none documented; static GitHub raw JSON, no quota | **311** unplayed fixtures across **20/20** clubs | **yes** — 380 matches, dates + some kickoff times | CC0 public domain |
+| **TheSportsDB v1** (`eventsnextleague.php?id=4335`) | **yes** (`thesportsdb`) | public key `123` by default; premium key optional via `LALIGA_FOOTBALL_API_KEY` | 30 req/min free, 100 premium, 120 business; `eventsnextleague` free tier returns **1** event (premium 20) | **1** fixture, 2/20 clubs | no — bounded window | community data; API terms apply |
+| **API-Football v3** (`fixtures?league=140&next=20`) | **yes** (`api-football`) | registered key (`LALIGA_FOOTBALL_API_KEY`) | 100 req/day, 10 req/min free; free plan covers seasons Year-4…Year-2 (2022–2024 in 2026) | not measured — no key used in this environment | no — `next=N` window | commercial terms |
+| Football-Data.co.uk `fixtures.csv` | no | none | none documented | host not reachable from this environment (the results CSV is fetched directly or through the text mirror) | no — near-term fixtures with odds | public download |
+| football-data.org v4 (`/competitions/PD/matches`) | no | free key required (account) | 10 req/min free; 12 competitions incl. La Liga; free-tier schedules delayed | not measured — no account created | no — time-frame window | terms restrict redistribution |
 
-- **1** stored upcoming fixture from TheSportsDB.
-- 2 of 20 current teams covered; the other 18 have no returned fixture.
-- 0 duplicate fixture IDs and 0 conflicting kickoff/status rows in this snapshot.
-- Schedule completeness: **`unknown_partial_provider_window`**.
-- The provider's "next events" response is a window, not a league calendar.
-  Missing fixtures are reported as unknown, never invented. A provider returning
-  no events does not mean there are no events.
+Deliberately not used: scraped endpoints with unclear terms, paid plans, and any
+source whose data could not be verified against a published season calendar.
+No subscription was purchased and no account was created for this phase.
+
+### 2.2 Measured coverage (`python main.py coverage`, 2026-11-12)
+
+- Store: **312** fixtures from `openfootball` (311) and `thesportsdb` (1).
+- **20 of 20** current clubs have upcoming fixtures; none missing.
+- **0** duplicate fixture IDs, **0** conflicting kickoff/status rows, **0** missing dates.
+- Calendar verification against `2026-27/es.1.json`: **260** fixtures still to
+  play, **260 matched**, **0 missing**, **100.0%** coverage, 20/20 teams complete.
+- **1** stored fixture disagrees with the calendar date (Athletic Bilbao vs
+  Espanyol: TheSportsDB `2026-11-20`, calendar `2026-11-22`). It is reported as
+  `rescheduled`, not silently merged.
+- Every club has **26** future fixtures in the calendar. The store holds 31–33
+  per club because OpenFootball also lists recent matches whose results have not
+  been entered yet; those are neither invented nor treated as results.
+- Provider attempts: OpenFootball `ok` (311), TheSportsDB `ok` (1), 0 failures.
+- Schedule completeness: **`verified_against_calendar`**.
+
+TheSportsDB's single-event response is a documented free-tier limitation, not a
+bug: its `eventsnextleague` endpoint is capped at one event for free users. The
+calendar provider exists precisely because a window cannot prove completeness.
+A provider returning no events never means there are no events.
 
 Merging rules (`merge_fixtures`, `merge_provider_batches`):
 
@@ -58,6 +77,9 @@ Merging rules (`merge_fixtures`, `merge_provider_batches`):
 - Same stable fixture ID (canonical teams + calendar date) is reconciled across
   providers; a kickoff-time move keeps the ID.
 - An incomplete payload with no kickoff never erases a known kickoff.
+- A time-less calendar row (date known, kickoff `00:00Z`) is merged into a timed
+  row from another provider, so one fixture cannot become two predictions; two
+  genuinely different clock times remain separate and are reported as a conflict.
 - Cross-provider kickoff disagreements are preserved as conflict rows for the
   audit rather than silently choosing one.
 - Stored fixtures that a provider no longer returns are kept; a partial response
