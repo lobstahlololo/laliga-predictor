@@ -6,7 +6,7 @@ match outcomes (**Home Win / Draw / Away Win**). It covers real data ingestion,
 backtesting, probability-calibration diagnostics, dynamic Elo ratings,
 Poisson/Dixon-Coles goal models, constrained ensembles, market-odds analysis,
 prediction-uncertainty diagnostics, an append-only prediction ledger, a versioned
-model registry, an automated update cycle, a FastAPI service, and an eight-page
+model registry, an automated update cycle, a FastAPI service, and a nine-page
 Streamlit analytics dashboard.
 
 The project is designed as both a working application and an honest ML
@@ -67,7 +67,7 @@ always, historical frequencies, market odds and multinomial logistic regression)
   separates insufficient data, warnings and confirmed degradation.
 - Serves a Streamlit dashboard with Home, Match Predictions, Model Performance,
   Team Analytics, Prediction History, Model Monitoring, Model Intelligence and
-  Model Operations pages.
+  Model Operations and Fixture Operations pages.
 - Registers every trained model as an immutable version with metrics, periods,
   feature-set hash and an artifact snapshot; promotion requires measured
   validation evidence and rollback restores the previous snapshot.
@@ -1038,3 +1038,83 @@ generations.
 11. Cache Poisson/Elo fits in the API once prediction latency matters.
 12. Add authentication and rate limiting before exposing the API publicly.
 13. Persist generated artifacts from the scheduled workflow to durable storage.
+
+---
+
+## Phase 8 — Automated fixture operations and prediction lifecycle
+
+The daily cycle now refreshes the full-season calendar **before** anything else,
+and every prediction has an explicit lifecycle.
+
+Required step order in `.github/workflows/update.yml` and
+`python -m src.pipeline.automation`:
+
+1. `fixtures` — fetch the OpenFootball calendar, validate it, normalise teams,
+   merge it into the fixture store, preserve stored valid fixtures, record
+   schedule revisions and provider telemetry.
+2. `data` — refresh played results from Football-Data.
+3. `coverage` — audit fixture coverage against the verified calendar.
+4. `predict` — generate exactly one current prediction per eligible fixture.
+5. `backfill` — settle verified final scores and void postponed/cancelled games.
+6. `quality` — data-quality audit.
+7. `reports` — ledger reports plus the live-performance report.
+8. `monitoring` — drift, calibration and operational checks.
+
+### Calendar refresh guarantees
+
+- A payload shorter than `CALENDAR_MIN_FIXTURES` (the full-season minimum) or
+  one with blank teams/invalid dates is **rejected as a whole**; the stored
+  fixtures are left byte-identical.
+- A provider outage is reported as `fallback` and never fails the data step.
+- A successful refresh writes `data/processed/fixture_refresh_state.json` with
+  `verified`, `fetched_at`, `verified_at`, counts and errors. Coverage
+  completeness may only be claimed when that manifest is verified and younger
+  than `CALENDAR_STALE_HOURS`.
+- Kickoff/date/status changes between two verified snapshots are appended to
+  `data/processed/fixture_schedule_revisions.jsonl` (append-only).
+- The workflow fails at an explicit verification gate when no verified refresh
+  happened in the run, so an outage cannot produce a silent "complete" report.
+
+### Prediction ledger and versioning
+
+`data/processed/prediction_history.csv` is append-only and now records
+`prediction_id`, `prediction_cycle`, `kickoff_utc`, `fixture_source`,
+`prediction_status`, `schedule_revision`, `supersedes_prediction_id`, expected
+goals, the most likely scoreline, `result_source`, `result_status`,
+`correction_count` and `corrected_at` in addition to the Phase 4 columns.
+
+- One snapshot per fixture per cycle: re-running a cycle appends nothing.
+- A reschedule or a later cycle appends a new snapshot and links it to the
+  snapshot it supersedes; earlier rows are never rewritten.
+- A kickoff that has already passed is never predicted.
+
+### Result reconciliation
+
+Only verified, internally consistent final scores settle a prediction. A result
+without both goals, or one whose stored outcome contradicts its goals, leaves
+the row pending. Postponed fixtures stay pending with `result_status=postponed`;
+cancelled/abandoned fixtures become `prediction_status=void`. Duplicate
+settlement is a no-op. When an official result is amended, the ledger row is
+updated, `correction_count` increments, and the previous values are appended to
+`data/processed/result_corrections.jsonl`.
+
+### New API endpoints (additive)
+
+`/fixtures/upcoming`, `/fixtures/schedule-changes`,
+`/fixtures/{fixture_id}/predictions`, `/predictions/history`,
+`/results/settled` and `/performance/live`. Existing endpoints are unchanged.
+
+### Dashboard
+
+The new **Fixture Operations** page (`dashboard/pages/8_Fixture_Operations.py`)
+shows refresh verification, the upcoming slate with prediction status, schedule
+revisions, settled results, corrections and live performance split from
+validation and historical test metrics.
+
+Commands:
+
+```bash
+python -m src.pipeline.automation --steps fixtures,data,coverage,predict,backfill,quality,reports,monitoring
+python -m src.monitoring.live_performance
+python -m src.data.football_calendar --refresh
+```

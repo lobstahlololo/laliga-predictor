@@ -17,6 +17,7 @@ Design rules:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,9 +31,14 @@ from src.utils.teams import canonical_team
 
 logger = logging.getLogger(__name__)
 
+# Phase 8 lifecycle columns are appended after the Phase 4 schema so old
+# ledgers keep loading unchanged. Every column is derived for legacy rows.
 CANONICAL_COLUMNS = [
+    "prediction_id",
     "fixture_id",
+    "prediction_cycle",
     "match_date",
+    "kickoff_utc",
     "home_team",
     "away_team",
     "predicted_at",
@@ -46,12 +52,29 @@ CANONICAL_COLUMNS = [
     "market_prob_home",
     "market_prob_draw",
     "market_prob_away",
+    "fixture_source",
+    "prediction_status",
+    "schedule_revision",
+    "supersedes_prediction_id",
+    "expected_home_goals",
+    "expected_away_goals",
+    "most_likely_scoreline",
     "actual_outcome",
     "actual_home_goals",
     "actual_away_goals",
     "correct",
+    "result_source",
+    "result_status",
     "settled_at",
+    "correction_count",
+    "corrected_at",
 ]
+
+STATUS_PENDING = "pending"
+STATUS_SETTLED = "settled"
+STATUS_VOID = "void"
+RESULT_FINAL = "final"
+RESULT_CORRECTED = "corrected"
 
 PROB_COLUMNS = ["model_prob_home", "model_prob_draw", "model_prob_away"]
 MARKET_COLUMNS = ["market_prob_home", "market_prob_draw", "market_prob_away"]
@@ -83,6 +106,38 @@ def make_fixture_id(home: str, away: str, match_date: str | None = None) -> str:
         if pd.notna(parsed):
             return f"{parsed:%Y%m%d}_{home_c}_v_{away_c}"
     return f"TBD_{home_c}_v_{away_c}"
+
+
+def _clean_str(value) -> str:
+    """Normalise one CSV cell, treating pandas placeholders as absent."""
+    if value is None:
+        return ""
+    try:
+        if isinstance(value, float) and not np.isfinite(value):
+            return ""
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in {"", "nan", "none", "nat", "<na>"} else text
+
+
+def make_prediction_id(
+    fixture_id,
+    predicted_at,
+    model_version,
+    prediction_cycle: str = "",
+) -> str:
+    """Deterministic identity for one prediction snapshot.
+
+    The ID depends on the fixture, the snapshot timestamp, the model version and
+    the prediction cycle, so a re-run of the same cycle cannot create a second
+    ID for an existing row.
+    """
+    payload = "|".join(
+        _clean_str(value)
+        for value in (fixture_id, predicted_at, model_version, prediction_cycle)
+    )
+    return "pred_" + hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def _to_label(code) -> str:
@@ -146,6 +201,31 @@ def normalize_history(df: pd.DataFrame) -> pd.DataFrame:
         if not str(out.at[idx, "predicted_at"]).strip():
             out.at[idx, "predicted_at"] = ""
 
+    # ---- Phase 8 lifecycle fields (derived for legacy rows) ----
+    for column in (
+        "kickoff_utc", "prediction_cycle", "fixture_source",
+        "supersedes_prediction_id", "prediction_id", "expected_home_goals",
+        "expected_away_goals", "most_likely_scoreline", "result_source",
+        "settled_at", "corrected_at",
+    ):
+        out[column] = out[column].map(_clean_str)
+    out["prediction_status"] = out["prediction_status"].map(_clean_str).str.lower()
+    out["result_status"] = out["result_status"].map(_clean_str).str.lower()
+    out["schedule_revision"] = out["schedule_revision"].map(_clean_str)
+    out["correction_count"] = out["correction_count"].map(_clean_str)
+    blank_ids = out["prediction_id"] == ""
+    if blank_ids.any():
+        out.loc[blank_ids, "prediction_id"] = out[blank_ids].apply(
+            lambda row: make_prediction_id(
+                row["fixture_id"], row["predicted_at"],
+                row["model_version"], row["prediction_cycle"],
+            ),
+            axis=1,
+        )
+    out.loc[out["prediction_status"] == "", "prediction_status"] = STATUS_PENDING
+    out.loc[out["schedule_revision"] == "", "schedule_revision"] = "0"
+    out.loc[out["correction_count"] == "", "correction_count"] = "0"
+
     out["predicted_outcome"] = out.apply(_infer_predicted_outcome, axis=1)
     out["actual_outcome"] = out["actual_outcome"].map(
         lambda v: "" if str(v).strip() == "" else str(int(float(v)))
@@ -171,6 +251,15 @@ def normalize_history(df: pd.DataFrame) -> pd.DataFrame:
         out.at[idx, "correct"] = str(
             int(out.at[idx, "predicted_outcome"] == _to_label(actual))
         )
+
+    # Lifecycle status follows the stored result, never the other way round.
+    settled_mask = out["actual_outcome"].astype(str).str.strip() != ""
+    void_mask = out["result_status"].isin({"cancelled", "canceled", "abandoned"})
+    out.loc[settled_mask, "prediction_status"] = STATUS_SETTLED
+    out.loc[
+        settled_mask & (out["result_status"] == ""), "result_status"
+    ] = RESULT_FINAL
+    out.loc[void_mask & ~settled_mask, "prediction_status"] = STATUS_VOID
 
     # Remove exact duplicate rows only; distinct snapshots are preserved.
     before = len(out)
@@ -230,6 +319,21 @@ def build_prediction_record(
     prob_draw: float,
     prob_away: float,
     market_probs: dict[str, float] | None = None,
+    prediction_cycle: str = "",
+    kickoff_utc: str = "",
+    fixture_source: str = "",
+    prediction_status: str = STATUS_PENDING,
+    schedule_revision: int | str = 0,
+    supersedes_prediction_id: str = "",
+    expected_home_goals: float | None = None,
+    expected_away_goals: float | None = None,
+    most_likely_scoreline: str = "",
+    actual_outcome: str = "",
+    actual_home_goals: str = "",
+    actual_away_goals: str = "",
+    result_source: str = "",
+    result_status: str = "",
+    settled_at: str = "",
 ) -> dict:
     """Build one canonical history row, validating probabilities."""
     probs = np.array([prob_home, prob_draw, prob_away], dtype=float)
@@ -241,9 +345,15 @@ def build_prediction_record(
     probs = probs / total  # guarantee the display/ledger sums to exactly 1
     label = PREDICTION_LABELS[int(np.argmax(probs))]
     market = market_probs or {}
+    fixture_id = make_fixture_id(home_team, away_team, match_date)
     return {
-        "fixture_id": make_fixture_id(home_team, away_team, match_date),
+        "prediction_id": make_prediction_id(
+            fixture_id, predicted_at, model_version, prediction_cycle
+        ),
+        "fixture_id": fixture_id,
+        "prediction_cycle": _clean_str(prediction_cycle),
         "match_date": str(match_date or "").strip(),
+        "kickoff_utc": _clean_str(kickoff_utc),
         "home_team": canonical_team(home_team),
         "away_team": canonical_team(away_team),
         "predicted_at": str(predicted_at),
@@ -257,11 +367,22 @@ def build_prediction_record(
         "market_prob_home": _format_prob(market.get("home")),
         "market_prob_draw": _format_prob(market.get("draw")),
         "market_prob_away": _format_prob(market.get("away")),
-        "actual_outcome": "",
-        "actual_home_goals": "",
-        "actual_away_goals": "",
+        "fixture_source": _clean_str(fixture_source),
+        "prediction_status": _clean_str(prediction_status) or STATUS_PENDING,
+        "schedule_revision": str(int(schedule_revision or 0)),
+        "supersedes_prediction_id": _clean_str(supersedes_prediction_id),
+        "expected_home_goals": _format_prob(expected_home_goals),
+        "expected_away_goals": _format_prob(expected_away_goals),
+        "most_likely_scoreline": _clean_str(most_likely_scoreline),
+        "actual_outcome": _clean_str(actual_outcome),
+        "actual_home_goals": _clean_str(actual_home_goals),
+        "actual_away_goals": _clean_str(actual_away_goals),
         "correct": "",
-        "settled_at": "",
+        "result_source": _clean_str(result_source),
+        "result_status": _clean_str(result_status),
+        "settled_at": _clean_str(settled_at),
+        "correction_count": "0",
+        "corrected_at": "",
     }
 
 
@@ -289,10 +410,34 @@ def append_predictions(
     else:
         combined = pd.concat([history, new], ignore_index=True)
 
-    key = ["fixture_id", "predicted_at", "model_name", "model_version",
-           "model_prob_home", "model_prob_draw", "model_prob_away"]
-    before = len(combined)
-    combined = combined.drop_duplicates(subset=key, keep="first")
+    # One snapshot per fixture per prediction cycle: re-running the same cycle
+    # never appends a duplicate. Legacy rows (no cycle) keep the older identity.
+    combined = combined.reset_index(drop=True)
+    cycle = combined["prediction_cycle"].astype(str).str.strip()
+    keep = pd.Series(False, index=combined.index)
+    if (cycle != "").any():
+        cycled = combined[cycle != ""]
+        keep.loc[
+            cycled.index[
+                ~cycled.duplicated(
+                    subset=["fixture_id", "prediction_cycle", "model_version"],
+                    keep="first",
+                )
+            ]
+        ] = True
+    legacy = combined[cycle == ""]
+    if not legacy.empty:
+        keep.loc[
+            legacy.index[
+                ~legacy.duplicated(
+                    subset=["fixture_id", "predicted_at", "model_name",
+                            "model_version", "model_prob_home",
+                            "model_prob_draw", "model_prob_away"],
+                    keep="first",
+                )
+            ]
+        ] = True
+    combined = combined[keep]
     appended = len(combined) - len(history)
     if appended <= 0:
         logger.info("No new predictions to append (all duplicates).")

@@ -144,6 +144,8 @@ def load_upcoming_fixtures() -> tuple[list[dict], str]:
                     "kickoff_utc": str(row.get("kickoff_utc", "")).strip(),
                     "status": str(row.get("status", "scheduled")).strip() or "scheduled",
                     "provider_event_id": str(row.get("provider_event_id", "")).strip(),
+                    "provider": str(row.get("provider", "")).strip(),
+                    "fixture_source": str(row.get("source", "")).strip(),
                 })
             return fixtures, str(UPCOMING_FIXTURES_PATH)
         except Exception as exc:  # noqa: BLE001 - fall back to text file

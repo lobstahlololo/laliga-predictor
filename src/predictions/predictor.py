@@ -345,6 +345,12 @@ def predictions_to_records(predictions: list[dict]) -> list[dict]:
                 "draw": market["implied_prob_draw"],
                 "away": market["implied_prob_away"],
             },
+            prediction_cycle=prediction.get("prediction_cycle", ""),
+            kickoff_utc=prediction.get("kickoff_utc", ""),
+            fixture_source=prediction.get("fixture_source", ""),
+            expected_home_goals=prediction.get("expected_home_goals"),
+            expected_away_goals=prediction.get("expected_away_goals"),
+            most_likely_scoreline=prediction.get("most_likely_scoreline", ""),
         ))
     return records
 

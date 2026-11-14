@@ -104,6 +104,19 @@ FIXTURE_CALENDAR_BASE_ENV = "LALIGA_FIXTURE_CALENDAR_BASE"
 FIXTURE_SEASON_ENV = "LALIGA_FIXTURE_SEASON"
 SEASON_CALENDAR_PATH = RAW_DIR / "season_calendar.json"
 
+# Phase 8: scheduled calendar refresh and prediction lifecycle state. These are
+# operational files written atomically; none of them is a model artifact.
+CALENDAR_REFRESH_ENV = "LALIGA_CALENDAR_REFRESH"
+FIXTURE_REFRESH_STATE_PATH = PROCESSED_DIR / "fixture_refresh_state.json"
+FIXTURE_SCHEDULE_REVISIONS_PATH = PROCESSED_DIR / "fixture_schedule_revisions.jsonl"
+RESULT_CORRECTIONS_PATH = PROCESSED_DIR / "result_corrections.jsonl"
+# A full La Liga season is 380 fixtures. Below this the payload is a partial
+# window and must never replace a verified store.
+CALENDAR_MIN_FIXTURES = 200
+# A calendar older than this is reported as stale and cannot support a
+# completeness claim.
+CALENDAR_STALE_HOURS = 36
+
 # Phase 4: model registry and operational artifacts.
 REGISTRY_DIR = MODEL_DIR / "registry"
 REGISTRY_PATH = REGISTRY_DIR / "registry.json"
@@ -138,6 +151,9 @@ FULL_SEASON_SUMMARY_PATH = EVAL_DIR / "full_season_summary.json"
 FULL_SEASON_REPORT_PATH = REPORTS_DIR / "full_season_evaluation.md"
 PREDICTION_MONITORING_PATH = REPORTS_DIR / "prediction_monitoring.json"
 PREDICTION_MONITORING_MARKDOWN_PATH = REPORTS_DIR / "prediction_monitoring.md"
+# Phase 8: live performance kept separate from validation/test metrics.
+LIVE_PERFORMANCE_PATH = REPORTS_DIR / "live_performance.json"
+LIVE_PERFORMANCE_MARKDOWN_PATH = REPORTS_DIR / "live_performance.md"
 
 # Coverage and quality thresholds. These are configuration, not fitted values.
 MIN_FULL_SEASON_MATCHES = 340

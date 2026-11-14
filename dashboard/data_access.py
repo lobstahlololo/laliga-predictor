@@ -46,6 +46,9 @@ from src.utils.config import (  # noqa: E402
     ENSEMBLE_WEIGHTS_PATH,
     EXPERIMENTS_INDEX_PATH,
     FEATURE_EXPERIMENT_FOLDS_PATH,
+    FIXTURE_REFRESH_STATE_PATH,
+    FIXTURE_SCHEDULE_REVISIONS_PATH,
+    LIVE_PERFORMANCE_PATH,
     FEATURE_EXPERIMENTS_PATH,
     FEATURE_IMPORTANCE_FOLDS_PATH,
     FEATURE_RECOMMENDATION_PATH,
@@ -657,3 +660,55 @@ def load_pipeline_runs(limit: int = 20, mtime: float = 0.0) -> list[dict]:
     from src.pipeline.automation import load_runs
 
     return load_runs(limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Phase 8: fixture refresh, lifecycle and live performance
+# ---------------------------------------------------------------------------
+
+@st.cache_data(show_spinner=False)
+def load_fixture_refresh_state(mtime: float = 0.0) -> dict:
+    """Calendar refresh manifest (verified flag, timestamps, counts)."""
+    from src.predictions.lifecycle import load_refresh_state
+
+    return load_refresh_state(FIXTURE_REFRESH_STATE_PATH)
+
+
+@st.cache_data(show_spinner=False)
+def load_fixture_freshness(mtime: float = 0.0) -> dict:
+    from src.predictions.lifecycle import calendar_freshness
+
+    return calendar_freshness(load_fixture_refresh_state(mtime))
+
+
+@st.cache_data(show_spinner=False)
+def load_schedule_revisions(limit: int = 200, mtime: float = 0.0) -> pd.DataFrame:
+    from src.predictions.lifecycle import load_schedule_revisions as _load
+
+    return pd.DataFrame(_load(FIXTURE_SCHEDULE_REVISIONS_PATH, limit=limit))
+
+
+@st.cache_data(show_spinner=False)
+def load_result_corrections(limit: int = 200, mtime: float = 0.0) -> pd.DataFrame:
+    from src.predictions.lifecycle import load_result_corrections as _load
+
+    return pd.DataFrame(_load(limit=limit))
+
+
+@st.cache_data(show_spinner=False)
+def fixture_lifecycle_status(
+    ledger_mtime: float = 0.0, fixtures_mtime: float = 0.0
+) -> pd.DataFrame:
+    """Upcoming fixtures with their current prediction status."""
+    from src.predictions.lifecycle import upcoming_fixture_status
+
+    history = load_history(ledger_mtime)
+    try:
+        return pd.DataFrame(upcoming_fixture_status(history))
+    except Exception as exc:  # noqa: BLE001 - page shows an empty state
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False)
+def load_live_performance(mtime: float = 0.0) -> dict:
+    return _read_json(LIVE_PERFORMANCE_PATH)

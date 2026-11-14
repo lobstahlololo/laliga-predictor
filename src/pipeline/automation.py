@@ -65,7 +65,18 @@ from src.utils.config import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-STEP_ORDER = ("data", "quality", "coverage", "predict", "backfill", "reports", "monitoring")
+# Calendar first: the fixture slate must be refreshed and verified before any
+# coverage claim, prediction or monitoring statement is produced.
+STEP_ORDER = (
+    "fixtures",
+    "data",
+    "coverage",
+    "predict",
+    "backfill",
+    "quality",
+    "reports",
+    "monitoring",
+)
 ALERT_WEBHOOK_ENV = "LALIGA_ALERT_WEBHOOK"
 ALERT_TIMEOUT_ENV = "LALIGA_ALERT_TIMEOUT"
 STATUS_OK = "ok"
@@ -175,6 +186,20 @@ def notify_failure(run: dict) -> bool:
 # Steps
 # ---------------------------------------------------------------------------
 
+def step_fixtures() -> dict:
+    """Refresh, validate and merge the full-season calendar.
+
+    Opt-in through ``LALIGA_CALENDAR_REFRESH=1`` so local cycles and the unit
+    suite never reach the network. The refresh keeps stored fixtures on an
+    outage, rejects partial payloads and records a verification manifest.
+    """
+    from src.predictions.lifecycle import refresh_fixture_calendar
+
+    if os.environ.get("LALIGA_CALENDAR_REFRESH", "0").strip() != "1":
+        return {"note": "calendar refresh disabled (set LALIGA_CALENDAR_REFRESH=1)"}
+    return refresh_fixture_calendar()
+
+
 def step_data() -> dict:
     """Refresh, validate and atomically persist the match dataset."""
     from src.data.make_dataset import (
@@ -234,48 +259,78 @@ def step_data() -> dict:
 
 
 def step_predict(fixture_path: str | None = None) -> dict:
-    """Score upcoming fixtures and append new snapshots to the ledger."""
+    """Score the full eligible slate: one snapshot per fixture per cycle.
+
+    The prediction engine is the shared inference engine, so CLI, API and
+    dashboard predictions stay consistent. No model is retrained here.
+    """
+    from src.predictions import lifecycle
+
     if fixture_path:
         from src.predictions.fixtures import read_fixture_file
 
         fixtures = read_fixture_file(fixture_path)
         source = fixture_path
     else:
-        fixtures, source = load_upcoming_fixtures()
-    if not fixtures:
-        return {"predictions": 0, "source": source, "note": "no upcoming fixtures"}
+        fixtures = None
+        source = None
 
     model, preprocessor, metadata = load_artifacts()
     raw = load_raw()
-    predictions, errors = predict_fixtures(
-        fixtures, model=model, preprocessor=preprocessor, metadata=metadata, raw=raw,
+    predictions, detail = lifecycle.generate_full_slate(
+        model=model,
+        preprocessor=preprocessor,
+        metadata=metadata,
+        raw=raw,
+        fixtures=fixtures,
     )
-    records = predictions_to_records(predictions)
-    appended, _ = hist.append_predictions(records)
-    return {
-        "predictions": len(predictions),
-        "appended": appended,
-        "errors": len(errors),
-        "source": source,
-        "model_version": metadata.get("model_version"),
-    }
+    detail["model_version"] = metadata.get("model_version")
+    if source:
+        detail["source"] = source
+    if not detail.get("eligible"):
+        detail["note"] = "no eligible upcoming fixtures"
+    return detail
 
 
 def step_backfill() -> dict:
-    """Fill blank results from played matches, leaving settled rows untouched."""
+    """Settle verified final scores; void postponed/cancelled/abandoned games.
+
+    Only complete, internally consistent final scores settle a prediction. A
+    later amendment appends a correction record instead of rewriting history.
+    """
+    from src.data.fixture_provider import load_fixture_rows
+    from src.predictions import lifecycle
+
     if not RAW_PATH.exists():
         raise RuntimeError(f"Raw dataset not found at {RAW_PATH}.")
     raw = pd.read_csv(RAW_PATH, parse_dates=["date"])
-    _, stats = hist.update_results(raw)
+    _, stats = lifecycle.settle_results(raw, fixtures=load_fixture_rows())
     return stats
 
 
 def step_reports() -> dict:
+    from src.monitoring.live_performance import (
+        build_live_performance,
+        write_live_performance,
+    )
+
     history, _ = hist.load_history()
     if history.empty:
-        return {"files": 0, "note": "ledger is empty"}
+        report = build_live_performance(history)
+        paths = write_live_performance(report)
+        return {
+            "files": len(paths),
+            "live_status": report["status"],
+            "note": "ledger is empty",
+        }
     written = write_reports(history)
-    return {"files": len(written)}
+    report = build_live_performance(history)
+    paths = write_live_performance(report)
+    return {
+        "files": len(written) + len(paths),
+        "live_status": report["status"],
+        "live_settled": report["counts"]["settled_rows"],
+    }
 
 
 def step_quality() -> dict:
@@ -337,6 +392,7 @@ def step_monitoring() -> dict:
 
 
 STEP_FUNCTIONS = {
+    "fixtures": step_fixtures,
     "data": step_data,
     "quality": step_quality,
     "coverage": step_coverage,

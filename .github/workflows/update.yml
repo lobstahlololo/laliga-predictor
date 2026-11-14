@@ -34,23 +34,60 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip check
 
+      # The fixture store, ledger, refresh manifest and reports live under
+      # gitignored paths, so operational state is carried between runs.
+      - name: Restore operational state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/raw
+            data/processed
+            reports
+            logs
+          key: operational-state-${{ github.run_id }}
+          restore-keys: |
+            operational-state-
+
       - name: Verify production model registry before the cycle
         run: python -m src.models.registry verify
 
-      - name: Refresh data, audit, predict, reconcile, report and monitor
+      # Required order: calendar refresh -> results data -> coverage audit ->
+      # full-slate predictions -> reconciliation -> data quality -> reports and
+      # monitoring. Any failed step stops the cycle and fails the job.
+      - name: Refresh fixtures, audit, predict, reconcile, report and monitor
         env:
           LALIGA_ALERT_WEBHOOK: ${{ secrets.LALIGA_ALERT_WEBHOOK }}
-          # Optional: a personal TheSportsDB/API-Football key. The free public
-          # key is used when the secret is unset.
           LALIGA_FOOTBALL_API_KEY: ${{ secrets.LALIGA_FOOTBALL_API_KEY }}
-          LALIGA_FIXTURE_PROVIDER: thesportsdb
-          LALIGA_FIXTURE_DISCOVERY: "1"
-          # Record provider freshness/failure telemetry for operations.
+          # The full-season calendar is the authoritative schedule source; the
+          # data step no longer fetches a second, partial provider window.
+          LALIGA_FIXTURE_PROVIDER: openfootball
+          LALIGA_FIXTURE_DISCOVERY: "0"
           LALIGA_FIXTURE_TELEMETRY: "1"
+          LALIGA_CALENDAR_REFRESH: "1"
         run: |
           python -m src.pipeline.automation \
-            --steps data,quality,coverage,predict,backfill,reports,monitoring \
+            --steps fixtures,data,coverage,predict,backfill,quality,reports,monitoring \
             --retries 2
+
+      - name: Verify the calendar refresh before claiming coverage
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+
+          from src.predictions.lifecycle import calendar_freshness, load_refresh_state
+
+          state = load_refresh_state()
+          freshness = calendar_freshness(state)
+          print(json.dumps({"state": state, "freshness": freshness}, indent=2, default=str))
+          if not freshness["verified"]:
+              print(
+                  "::error::The season calendar was not refreshed and verified "
+                  "in this run; fixture coverage must not be reported as complete."
+              )
+              sys.exit(1)
+          print(f"::notice::Calendar verified with {state.get('fetched', 0)} fixtures.")
+          PY
 
       - name: Verify production registry after the cycle
         run: python -m src.models.registry verify
@@ -64,6 +101,17 @@ jobs:
             exit 1
           fi
 
+      - name: Save operational state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/raw
+            data/processed
+            reports
+            logs
+          key: operational-state-${{ github.run_id }}
+
       - name: Upload operational artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,5 +122,8 @@ jobs:
             logs/
             models/evaluation/
             data/processed/fixture_provider_status.json
+            data/processed/fixture_refresh_state.json
+            data/processed/fixture_schedule_revisions.jsonl
+            data/processed/result_corrections.jsonl
           retention-days: 14
           if-no-files-found: warn

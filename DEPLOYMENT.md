@@ -254,3 +254,55 @@ a Linux pass.
   built-in auth and is intended for local/internal use.
 - `POST /predict` validates team names, odds parity and date input; unknown teams
   return `422` instead of a fabricated forecast.
+
+---
+
+## Phase 8: scheduled fixture operations
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LALIGA_CALENDAR_REFRESH` | `0` | `1` enables the `fixtures` step (scheduled runs set it); off keeps local cycles and tests offline |
+| `LALIGA_FIXTURE_TELEMETRY` | `0` | `1` records calendar/provider telemetry for operations |
+
+The scheduled workflow sets `LALIGA_FIXTURE_PROVIDER=openfootball` and
+`LALIGA_FIXTURE_DISCOVERY=0`: the calendar step is the single refresh point, so
+the data step does not fetch a second, partial provider window.
+
+### Operational state
+
+The workflow restores `data/raw`, `data/processed`, `reports` and `logs` from an
+`actions/cache` entry and saves them after every run, because those paths are
+gitignored. State therefore survives between scheduled runs and a fresh
+checkout can still verify the refresh manifest.
+
+Files written by a cycle:
+
+- `data/processed/fixture_refresh_state.json` — refresh manifest (verified flag).
+- `data/processed/fixture_schedule_revisions.jsonl` — append-only schedule changes.
+- `data/processed/result_corrections.jsonl` — append-only result amendments.
+- `data/processed/prediction_history.csv` — append-only prediction ledger.
+- `reports/live_performance.json` / `.md` — live vs validation/test performance.
+
+### Failure behaviour
+
+- A provider outage or invalid payload keeps the stored fixtures and records an
+  unverified manifest; the pipeline itself continues.
+- After the cycle, the `Verify the calendar refresh before claiming coverage`
+  step reads the manifest and **fails the job** if the refresh was not verified
+  in this run. This is deliberate: an unverified calendar must never be reported
+  as complete coverage.
+- Any failed pipeline step stops the cycle (later steps are not attempted) and
+  the job exits non-zero; `LALIGA_ALERT_WEBHOOK` optionally posts the failure.
+- The registry snapshot check runs with `if: always()` and fails the job if
+  `models/registry` or `models/saved_models` changed.
+
+### Local verification
+
+```bash
+LALIGA_CALENDAR_REFRESH=1 python -m src.pipeline.automation --steps fixtures
+python -m src.predictions.lifecycle
+python -m src.monitoring.live_performance
+python -m src.models.registry verify
+```

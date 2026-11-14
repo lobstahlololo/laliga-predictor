@@ -594,6 +594,66 @@ def create_app(cache: Cache | None = None) -> FastAPI:
     def runs(limit: int = Query(default=10, ge=1, le=100)) -> list[dict]:
         return _clean(load_runs(limit=limit))
 
+    # ------------------------------------------------------------------
+    # Phase 8 lifecycle and operations endpoints. Additive only: the existing
+    # /fixtures, /predict and /performance contracts are unchanged.
+    # ------------------------------------------------------------------
+
+    @app.get("/fixtures/upcoming", tags=["operations"])
+    def upcoming_fixtures(
+        limit: int = Query(default=200, ge=1, le=500),
+        services: Services = Depends(get_services),
+    ) -> list[dict]:
+        from src.predictions.lifecycle import upcoming_fixture_status
+
+        return _clean(upcoming_fixture_status(services.history, limit=limit))
+
+    @app.get("/fixtures/schedule-changes", tags=["operations"])
+    def fixture_schedule_changes(
+        limit: int = Query(default=100, ge=1, le=1000),
+    ) -> list[dict]:
+        from src.predictions.lifecycle import load_schedule_revisions
+
+        return _clean(list(reversed(load_schedule_revisions(limit=limit))))
+
+    @app.get("/fixtures/{fixture_id}/predictions", tags=["operations"])
+    def fixture_predictions(
+        fixture_id: str,
+        limit: int = Query(default=50, ge=1, le=500),
+        services: Services = Depends(get_services),
+    ) -> list[dict]:
+        from src.predictions.lifecycle import prediction_history
+
+        return _clean(
+            prediction_history(services.history, fixture_id=fixture_id, limit=limit)
+        )
+
+    @app.get("/predictions/history", tags=["operations"])
+    def prediction_history_endpoint(
+        limit: int = Query(default=200, ge=1, le=1000),
+        services: Services = Depends(get_services),
+    ) -> list[dict]:
+        from src.predictions.lifecycle import prediction_history
+
+        return _clean(prediction_history(services.history, limit=limit))
+
+    @app.get("/results/settled", tags=["operations"])
+    def settled_results_endpoint(
+        limit: int = Query(default=200, ge=1, le=1000),
+        services: Services = Depends(get_services),
+    ) -> list[dict]:
+        from src.predictions.lifecycle import settled_results
+
+        return _clean(settled_results(services.history, limit=limit))
+
+    @app.get("/performance/live", tags=["operations"])
+    def live_performance(
+        services: Services = Depends(get_services),
+    ) -> dict:
+        from src.monitoring.live_performance import build_live_performance
+
+        return _clean(build_live_performance(services.history))
+
     return app
 
 

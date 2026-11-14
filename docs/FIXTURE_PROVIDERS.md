@@ -81,3 +81,33 @@ and the raw payload. It is git-ignored, so CI and fresh clones report
 - Football-Data.co.uk `fixtures.csv` and football-data.org were evaluated but not
   integrated: the first was unreachable from this environment and publishes no
   full calendar, the second needs an account and limits free-tier schedules.
+
+## Scheduled calendar refresh and verification (Phase 8)
+
+`python -m src.pipeline.automation --steps fixtures` (or the whole cycle) runs
+`src.predictions.lifecycle.refresh_fixture_calendar`:
+
+1. **Fetch** the OpenFootball season calendar through `OpenFootballProvider`.
+2. **Validate** the payload: it must be non-empty, contain at least
+   `CALENDAR_MIN_FIXTURES` fixtures, have no blank teams and no invalid dates.
+   A payload that fails validation is rejected as a whole.
+3. **Normalise** teams and fixtures with the same canonicalisation used by the
+   store, so IDs and pairings are comparable.
+4. **Merge** into the fixture store with the documented merge rules; stored
+   fixtures the calendar does not return are preserved.
+5. **Preserve** the store byte-for-byte on any fetch failure or invalid payload.
+6. **Record telemetry** for the provider attempt in
+   `data/processed/fixture_provider_status.json`.
+7. **Record schedule revisions** (date, kickoff time or status changes) in
+   `data/processed/fixture_schedule_revisions.jsonl`.
+8. **Persist the manifest** `data/processed/fixture_refresh_state.json` with
+   `status`, `verified`, `fetched_at`, `verified_at`, counts and errors.
+
+Verification rule: coverage completeness may only be claimed when the manifest
+is `verified` and its `verified_at` is younger than `CALENDAR_STALE_HOURS`
+(36 hours). `src.predictions.lifecycle.calendar_freshness` is the single place
+that decides this, and the dashboard, API and workflow all use it.
+
+An outage is reported as `fallback` and leaves `verified=false`. The workflow's
+verification gate then fails the job, so an unrefreshed calendar cannot be
+mistaken for a complete one.

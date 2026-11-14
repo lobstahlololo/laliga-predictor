@@ -124,3 +124,31 @@ so those rows are not evidence.
 - No closing-line or flat-stake out-of-sample audit was performed.
 - The Linux CI workflow is configured; it was not executed from this Windows
   environment, so no Linux pass is claimed here.
+
+## Live performance (Phase 8)
+
+`python -m src.monitoring.live_performance` writes
+`reports/live_performance.json` and `reports/live_performance.md`. The report
+keeps three samples separate and never pools them:
+
+| Split | Source | Meaning |
+|---|---|---|
+| Validation | production model metadata | model-selection window |
+| Historical test | production model metadata | untouched test season |
+| Live | append-only ledger | settled real predictions |
+
+Every live block reports log-loss, multiclass Brier score, accuracy, macro-F1,
+per-class precision/recall, draw recall and expected calibration error (ECE),
+with its sample size. Below `MONITORING_MIN_SETTLED` (30) the block is marked
+`insufficient_data` and must not be read as a conclusion.
+
+Live metrics are also grouped by season and by model version, so a model change
+cannot be hidden by pooled numbers and earlier versions keep their own record.
+Void predictions (postponed/cancelled/abandoned fixtures) are excluded from all
+metrics; corrected results are scored with the corrected official score, while
+the previous record remains in `data/processed/result_corrections.jsonl`.
+
+The API exposes the same report at `/performance/live`, and the dashboard's
+Fixture Operations page displays it next to the refresh manifest and settled
+results. Live performance never triggers retraining, promotion or a registry
+write.
